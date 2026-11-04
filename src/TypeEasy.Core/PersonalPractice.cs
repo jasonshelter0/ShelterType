@@ -167,7 +167,7 @@ public static class PersonalPracticeGenerator
     private static string ConfusionText(string mode, PersonalPracticeTarget target)
     {
         // IME output remains text; no physical key or encoding is inferred.
-        if (mode == "中文输入" || !IsExpected(mode, target.Actual)) return string.Concat(Enumerable.Repeat(target.Expected, 4));
+        if (mode.EndsWith("中文输入") || !IsExpected(mode, target.Actual)) return string.Concat(Enumerable.Repeat(target.Expected, 4));
         return target.Expected + target.Actual + target.Expected + target.Expected + target.Actual + target.Expected;
     }
 
@@ -176,13 +176,13 @@ public static class PersonalPracticeGenerator
         {
             Title = kind == PersonalPracticeKind.Confusions ? "易混输入" : "语境巩固", Group = "专属练习/" + mode,
             Category = mode.StartsWith("五笔", StringComparison.Ordinal) ? "五笔" : mode is "中文输入" or "拼音编码" ? "中文" : "英文",
-            Variant = mode.StartsWith("五笔", StringComparison.Ordinal) ? mode[2..] : mode == "拼音编码" ? "拼音" : "专属练习",
-            InputMode = mode == "拼音编码" ? "pinyin" : source?.InputMode ?? "",
+            Variant = mode.StartsWith("五笔", StringComparison.Ordinal) ? mode[2..].Replace("中文输入","") : mode == "拼音编码" ? "拼音" : "专属练习",
+            InputMode = mode == "拼音编码" ? "pinyin" : mode.StartsWith("五笔")&&mode.EndsWith("中文输入")?"wubi-ime":source?.InputMode ?? "",
             TeachingImage = source?.TeachingImage ?? ""
         };
 
     internal static ExerciseItem CloneItem(ExerciseItem item)
-        => new() { Prompt = item.Prompt, Expected = item.Expected, Hint = item.Hint, ImagePath = item.ImagePath };
+        => new() { Prompt = item.Prompt, Expected = item.Expected, Hint = item.Hint, ImagePath = item.ImagePath,KeySequence=item.KeySequence };
 
     internal static string Fingerprint(PersonalPracticePlan plan)
         => Hash(JsonSerializer.Serialize(new

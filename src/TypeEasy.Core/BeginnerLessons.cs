@@ -56,26 +56,24 @@ internal static class BeginnerLessons
 
     public static IEnumerable<Course> CreateRootLessons(string data)
     {
-        // Original 86/98 glyph cards retain their printed key labels. These are learning cards,
-        // not a hidden-answer quiz; the hints state this explicitly.
+        // Present every root separately, ordered by key within its stroke zone.
         foreach (var variant in new[] { "86", "98" })
         {
-            var chart = FindTeachingFile(data, "wubi" + variant + "-keyboard.png");
-            var tiles = "abcdefghijklmnopqrstuvwxyz"[..25].ToDictionary(c => c,
-                c => FindTeachingFile(data, "roots" + variant + "/" + char.ToUpperInvariant(c) + ".png"));
-            if (chart is null || tiles.Values.Any(v => v is null)) continue;
+            var glyphs=ReadRootGlyphs(data,variant);
+            if(glyphs.Count==0)continue;
             var zones = new[] { ("01", "横区", "gfdsa"), ("02", "竖区", "hjklm"), ("03", "撇区", "trewq"), ("04", "捺区", "yuiop"), ("05", "折区", "nbvcx"), ("06", "全部键位", "gfdsa" + "hjklm" + "trewq" + "yuiop" + "nbvcx") };
             foreach (var (number, title, keys) in zones)
             {
                 var course = new Course {
-                    Id = "builtin/wubi" + variant + "/root-zone-" + number + "/v1",
-                    Title = number + " · " + title + "字根识记（原版图）", Category = "五笔", Variant = variant + "版",
+                    Id = "builtin/wubi" + variant + "/root-zone-" + number + "/v2",
+                    Title = number + " · " + title + "字根识记", Category = "五笔", Variant = variant + "版",
                     Group = variant + "版/入门字根", TeachingImage = "Teaching/wubi" + variant + "-keyboard.png"
                 };
                 foreach (var key in keys)
+                    foreach(var glyph in glyphs.Where(g=>g.Key==key.ToString()).OrderBy(g=>g.Id,StringComparer.Ordinal))
                     course.Items.Add(new ExerciseItem {
-                        Prompt = title + " · 字根识记", Expected = key + " ", ImagePath = "Teaching/roots" + variant + "/" + char.ToUpperInvariant(key) + ".png",
-                        Hint = "原版字根卡片（保留字母标注）：观察字根，按 " + char.ToUpperInvariant(key) + " 键，再按空格。"
+                        Prompt = "字根 " + (course.Items.Count+1).ToString("D3"), Expected = key + " ", ImagePath = glyph.ImagePath,
+                        Hint = "观察字根，按 " + char.ToUpperInvariant(key) + " 键，再按空格。"
                     });
                 yield return course;
             }

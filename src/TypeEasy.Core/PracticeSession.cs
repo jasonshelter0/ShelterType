@@ -162,6 +162,20 @@ public sealed class PracticeSession : IDisposable
     private static string ProgressPath(Course course, string dataDirectory)
         => Path.Combine(dataDirectory, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(course.Id))).ToLowerInvariant() + ".json");
 
+    public static bool MigrateWubiPosition(Course source,Course target,string directory)
+    {
+        if(target.InputMode!="wubi-ime"||target.BaseCourseId!=source.Id||source.Items.Count!=target.Items.Count||
+            !source.Items.Select(i=>i.Prompt).SequenceEqual(target.Items.Select(i=>i.Prompt))||
+            CheckpointExists(ProgressPath(target,directory)))return false;
+        var saved=ReadSavedState(source,ProgressPath(source,directory),out _);
+        if(saved.ItemIndex==0)return false;
+        using var session=Open(target,directory);
+        session.State.ItemIndex=saved.ItemIndex;
+        session.State.CharacterIndex=0;
+        if(session.IsComplete)session.State.CompletedAt=saved.CompletedAt??DateTimeOffset.UtcNow;
+        session.Save();return true;
+    }
+
     private static PracticeState ReadSavedState(Course course, string path, out string? notice)
     {
         var state = CreateState(course);
@@ -450,6 +464,7 @@ public sealed class PracticeSession : IDisposable
         return new Course
         {
             Id = "review:" + Course.Id,
+            Origin=Course.Origin,SourceUrl=Course.SourceUrl,Author=Course.Author,License=Course.License,BaseCourseId=Course.Id,
             Title = "错键巩固 · " + Course.Title,
             Category = Course.Category,
             Variant = Course.Variant,
@@ -462,6 +477,7 @@ public sealed class PracticeSession : IDisposable
                 Expected = Course.Items[i].Expected,
                 Hint = Course.Items[i].Hint,
                 ImagePath = Course.Items[i].ImagePath
+                ,KeySequence=Course.Items[i].KeySequence
             }).ToList()
         };
     }

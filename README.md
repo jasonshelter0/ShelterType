@@ -1,5 +1,10 @@
 # ShelterType
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="Branding/ShelterType-lockup-dark.svg">
+  <img src="Branding/ShelterType-lockup-light.svg" alt="ShelterType — Shelter 双三角形 S 与键帽标志" width="450">
+</picture>
+
 精简的 Windows 原生打字练习程序。保留熟悉的五笔、英文、中文课程体验，加入续练、暗色模式和个人统计；使用 WPF，不包含 WebView、Electron 或浏览器内核。
 
 ## 下载与运行
@@ -10,8 +15,14 @@
 
 本项目选择便携版，便于迭代、备份和迁移。程序、课程与个人记录放在同一目录，无后台服务。要移除程序，关闭后删除该目录即可；需要保留记录时，先备份 `UserData/`。
 
+## 品牌
+
+Shelter 双三角形 S 是跨项目品牌标记，ShelterType 使用带键帽的 A 方案。深浅背景、单色及名称组合源文件保存在 [Branding](Branding/使用说明.txt)。
+
 ## 功能
 
+- 内置五笔词典与字根表；课程和测速中按 F2 随时查词，测速计时继续。
+- 适用课程可乱序复习，已完成课程可重新练习；测速支持随机文章与 Enter 开始。
 - 五笔 86/98、英文、中文、拼音和入门指法课程，按层级分类。
 - 每门课独立保存进度，包括长课中当前项内的输入位置。
 - 课程列表以空环、进度圆环、圆环中央对号区分未完成、进行中与已完成；进度随输入即时更新。
@@ -78,3 +89,15 @@ SHA-256 用于校验下载完整性，不等同于 Windows 代码签名。当前
 ShelterType is a lightweight native Windows typing trainer with Wubi 86/98, English and Chinese lessons, resumable progress, finger guidance, speed tests and local heatmaps. Its interface supports Simplified Chinese, English and French. It uses WPF and does not include a web engine.
 
 Download `ShelterType-win-x64.zip` from [Releases](https://github.com/jasonshelter0/ShelterType/releases/latest), extract the entire archive to a writable folder and run `ShelterType.exe`. The Windows x64 portable package includes .NET; no separate runtime installation is required. Updates preserve `UserData/`. Original course materials are included with permission confirmed by the project maintainer; see the acknowledgements above.
+
+## 本地开发新增功能（未发布）
+
+- 仅保留主程序内的 F2 词典，无独立词典入口。
+- 设置中可对五笔、拼音、单词等离散练习创建持久化乱序轮次；文章不打乱。左侧乱序课程可继续练习。
+- 限时测试支持默认随机文章，避免紧接着重复抽中同一篇。
+- 原文空格保留原始宽度；结果区不逐字折行；统一界面字体。
+- 86/98 字根表使用现有键盘绘制，可点键查看放大的轮廓。字根轮廓暂仍有 Kingsoft 来源。
+- 新增 32 篇带来源信息的公共领域文章；当前共 753 门课程。
+- `Courses/provenance.json` 记录资源来源，`package.ps1 -ExcludeKingsoft` 可生成不附带旧资源的包（默认仍附带）。
+
+本地测试步骤见 `本轮测试.txt`。个人记录不会提交进源码或打包。

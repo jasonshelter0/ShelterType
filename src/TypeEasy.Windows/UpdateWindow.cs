@@ -30,7 +30,7 @@ public sealed class UpdateWindow : Window
         Title = UiText.T("ShelterType 更新", "ShelterType updates", "Mises à jour de ShelterType");
         Width = 560; Height = 420; MinWidth = 470; MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI"); FontSize = 14;
+        FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 14;
         SetResourceReference(BackgroundProperty, "Bg"); SetResourceReference(ForegroundProperty, "Ink");
         SourceInitialized += (_, _) => AboutWindow.ApplyTitleTheme(this);
         var root = new DockPanel { Margin = new Thickness(26) }; Content = root;

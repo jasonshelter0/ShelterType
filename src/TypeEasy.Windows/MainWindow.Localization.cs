@@ -9,6 +9,7 @@ public partial class MainWindow
     private void ApplyLanguage(bool rebuildCourses = true)
     {
         UiText.Language = prefs.Language;
+        DictionaryButton.Content = UiText.T("五笔86词典  F2", "Wubi 86 dictionary  F2", "Dictionnaire Wubi 86  F2");
         prefs.Language = UiText.Language;
         Title = "ShelterType";
         BrandLabel.Text = "ShelterType";
@@ -20,7 +21,8 @@ public partial class MainWindow
         RefreshUpdateNotice();
         WubiTab.Content = UiText.Mode("五笔");
         EnglishTab.Content = UiText.Mode("英文");
-        ChineseTab.Content = UiText.Mode("中文");
+        ChineseTab.Content = UiText.T("拼音", "Pinyin", "Pinyin");
+        RestartCourseButton.Content=UiText.T("重新练习","Practise again","Recommencer");
         SearchPlaceholder.Text = UiText.T("搜索课程", "Search courses", "Rechercher un cours");
         AutomationProperties.SetName(SearchBox, SearchPlaceholder.Text);
         AutomationProperties.SetName(InputBox, UiText.T("练习输入框", "Practice input", "Zone de saisie"));
@@ -53,6 +55,7 @@ public partial class MainWindow
         CourseTitle.Text = Regex.IsMatch(title, @"^\d+$")
             ? CourseLabels.Group(session.Course.Group.Split('/').Last()) + " " + title : title;
         CourseTitle.ToolTip = CourseLabels.Path(session.Course);
+        if(session.Course.SourceUrl.Length>0)CourseTitle.ToolTip+="\n"+session.Course.Author+"\n"+session.Course.SourceUrl;
         CourseSubtitle.Text = UiText.Mode(session.Course.Category) + " / " + CourseLabels.Group(session.Course.Group);
     }
 

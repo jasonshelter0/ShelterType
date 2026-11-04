@@ -14,7 +14,7 @@ public sealed class AboutWindow : Window
     {
         Title = UiText.T("关于 ShelterType", "About ShelterType", "À propos de ShelterType");
         Width = 570; Height = 560; MinWidth = 470; MinHeight = 430; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI"); FontSize = 14;
+        FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 14;
         Language = System.Windows.Markup.XmlLanguage.GetLanguage(UiText.Culture.IetfLanguageTag);
         SetResourceReference(BackgroundProperty, "Bg"); SetResourceReference(ForegroundProperty, "Ink");
         SourceInitialized += (_, _) => ApplyTitleTheme(this); Activated += (_, _) => ApplyTitleTheme(this);
@@ -22,7 +22,10 @@ public sealed class AboutWindow : Window
         var done = new Button { Content = UiText.T("关闭", "Close", "Fermer"), HorizontalAlignment = HorizontalAlignment.Right, MinWidth = 84, Margin = new Thickness(0, 18, 0, 0) };
         done.Click += (_, _) => Close(); DockPanel.SetDock(done, Dock.Bottom); root.Children.Add(done);
         var body = new StackPanel(); root.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        body.Children.Add(new TextBlock { Text = "ShelterType", FontSize = 27, FontWeight = FontWeights.SemiBold });
+        var brand = new StackPanel { Orientation = Orientation.Horizontal };
+        brand.Children.Add(new BrandMark { Width = 64, Height = 64, Margin = new Thickness(0, 0, 14, 0) });
+        brand.Children.Add(new TextBlock { Text = "ShelterType", FontFamily = new FontFamily("Segoe UI"), FontSize = 27, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        body.Children.Add(brand);
         var assembly = typeof(AboutWindow).Assembly;
         var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
             ?? assembly.GetName().Version?.ToString(3) ?? UiText.T("未知", "Unknown", "Inconnue");

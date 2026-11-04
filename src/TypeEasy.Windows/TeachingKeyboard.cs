@@ -26,6 +26,16 @@ public sealed class TeachingKeyboard : UserControl
     private string? _selectedStatKey;
     private KeyboardErrorPath? _errorPath;
     public event Action<string>? KeySelected;
+    public IReadOnlyDictionary<string,List<Geometry>>? RootGlyphs {get;set;}
+    public bool WubiZones {get;set;}
+    private bool UsesWubiZones=>WubiZones||RootGlyphs is not null;
+    public static int WubiZone(string key)
+    {
+        if(key.Length!=1)return -1;
+        var zones=new[]{"GFDSA","HJKLM","TREWQ","YUIOP","NBVCX","Z"};
+        return Array.FindIndex(zones,z=>z.Contains(key.ToUpperInvariant(),StringComparison.Ordinal));
+    }
+    private static readonly Color[] WubiColors={Color.FromRgb(63,180,225),Color.FromRgb(80,190,130),Color.FromRgb(239,177,63),Color.FromRgb(177,133,235),Color.FromRgb(235,120,136),Color.FromRgb(150,162,174)};
     public void SetStatistics(IReadOnlyDictionary<string,KeyboardHeatValue>? values,bool numericPad=false,string? selectedKey=null)
     {
         StopDemo(); _statistics=values; _selectedStatKey=selectedKey; _numericPad=numericPad; _target=null;
@@ -90,7 +100,7 @@ public sealed class TeachingKeyboard : UserControl
             var text=key is not null&&_statistics.TryGetValue(key.Id,out var value)?value.Tooltip:UiText.T("无记录","No data","Aucune donnée");
             if(ToolTip as string != text)ToolTip=text;
         };
-        MouseLeftButtonDown += (_,e) => { if(_statistics is not null&&StatisticsKeyAt(e.GetPosition(this)) is { } key)KeySelected?.Invoke(key.Id); };
+        MouseLeftButtonDown += (_,e) => { if((_statistics is not null||RootGlyphs is not null)&&StatisticsKeyAt(e.GetPosition(this)) is { } key)KeySelected?.Invoke(key.Id); };
     }
 
     private DrawKey? StatisticsKeyAt(Point point)
@@ -173,6 +183,11 @@ public sealed class TeachingKeyboard : UserControl
         var lit = !IsDemonstrating || _demoPressed;
         var label = guide is null ? "" : GuideLabel(guide);
         DrawText(dc, (IsDemonstrating ? UiText.T("示范  ","Demo  ","Démo  ") : "") + label, new Point(25, 0), 13, ResourceBrush("Ink", "#E9F0EE"));
+        if(UsesWubiZones&&_statistics is null)
+        {
+            var labels=UiText.T("横,竖,撇,捺,折,Z","1,2,3,4,5,Z","1,2,3,4,5,Z").Split(',');
+            for(int i=0;i<6;i++){dc.DrawRoundedRectangle(new SolidColorBrush(WubiColors[i]),null,new Rect(410+i*61,3,9,9),2,2);DrawText(dc,labels[i],new Point(423+i*61,0),11,ResourceBrush("Ink","#E9F0EE"));}
+        }
         if (ShowHands)
         {
             DrawHandConnections(dc, false, guide, lit, _numericPad);
@@ -212,8 +227,25 @@ public sealed class TeachingKeyboard : UserControl
         var rect = new Rect(key.X, key.Y, key.Width - 3, key.Height - 3);
         var fill = key.Finger is { } finger ? ZoneFill(finger, active || shift, subdued) : field;
         var border = key.Finger is { } f ? new SolidColorBrush(Mix(fill, FingerColors[f], active || shift ? 1 : subdued ? 0.1 : 0.46)) : line;
+        if(UsesWubiZones)
+        {
+            var zone=WubiZone(key.Id);
+            fill=zone<0?field:active?WubiColors[zone]:Mix(field,WubiColors[zone],Luminance(field)<0.3?0.58:0.4);
+            border=zone<0?line:new SolidColorBrush(Mix(fill,WubiColors[zone],0.65));
+        }
         dc.DrawRoundedRectangle(new SolidColorBrush(fill), new Pen(border, active || shift ? 2 : 0.8), rect, 4, 4);
         var foreground = ContrastingInk(fill);
+        if(RootGlyphs is not null && RootGlyphs.TryGetValue(key.Id,out var roots))
+        {
+            DrawText(dc,key.Id,new Point(rect.Left+4,rect.Top),11,foreground);
+            for(var i=0;i<roots.Count;i++)
+            {
+                var cellHeight=(rect.Height-18)/Math.Ceiling(roots.Count/3d);
+                var cell=new Rect(rect.Left+3+(i%3)*14,rect.Top+16+(i/3)*cellHeight,12,cellHeight-1);
+                VectorRoots.Draw(dc,roots[i],cell,foreground);
+            }
+            return;
+        }
         var keyLabel=KeyLabel(key);
         if (keyLabel.Contains("  ", StringComparison.Ordinal))
         {
@@ -345,7 +377,7 @@ public sealed class TeachingKeyboard : UserControl
             var start = new Point(key.X + (key.Width - 3) / 2, key.Y + key.Height - 3);
             var end = HandPoint(finger.Tip, right);
             end.Y -= 3;
-            var color = FingerColors[finger.Finger];
+            var color = UsesWubiZones?Color.FromRgb(160,170,175):FingerColors[finger.Finger];
             var pen = new Pen(new SolidColorBrush(Color.FromArgb(active ? (byte)190 : (byte)75, color.R, color.G, color.B)), active ? 1.5 : 0.75)
                 { DashStyle = active ? DashStyles.Solid : new DashStyle(new[] { 2.0, 4.0 }, 0) };
             var path = new StreamGeometry();
@@ -375,7 +407,7 @@ public sealed class TeachingKeyboard : UserControl
         foreach (var finger in HandFingers)
         {
             var active = FingerActive(finger.Finger, right, guide, lit);
-            var color = FingerColors[finger.Finger];
+            var color = UsesWubiZones?Color.FromRgb(160,170,175):FingerColors[finger.Finger];
             if (active)
             {
                 var knuckle = finger.Finger switch {

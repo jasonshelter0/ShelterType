@@ -8,6 +8,7 @@ public static class CourseLabels
 {
     private static readonly Dictionary<string, (string En, string Fr)> Names = new(StringComparer.Ordinal)
     {
+        ["乱序练习"]=("Shuffled practice","Exercices mélangés"), ["公共领域"]=("Public domain","Domaine public"),
         ["专属练习"]=("Personal practice","Exercices ciblés"), ["易混输入"]=("Confusion practice","Saisies à distinguer"), ["语境巩固"]=("Context practice","Révision en contexte"),
         ["五笔86版"]=("Wubi 86","Wubi 86"), ["五笔98版"]=("Wubi 98","Wubi 98"), ["拼音编码"]=("Pinyin codes","Codes pinyin"), ["中文输入"]=("Chinese input","Saisie chinoise"),
         ["五笔"]=("Wubi","Wubi"), ["英文"]=("English","Anglais"), ["中文"]=("Chinese","Chinois"),

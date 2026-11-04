@@ -16,6 +16,7 @@ namespace TypeEasy.Windows;
 
 public partial class MainWindow : Window
 {
+    private readonly AlignedTyping alignedTyping=new();
     private readonly string store;
     private readonly Preferences prefs = new();
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -39,6 +40,7 @@ public partial class MainWindow : Window
         try { instanceLock = new FileStream(Path.Combine(store, "session.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
         catch (IOException) { MessageBox.Show(UiText.T("程序已在运行。", "The app is already running.", "L’application est déjà ouverte."), "ShelterType"); Application.Current.Shutdown(); return; }
         InitializeComponent();
+        PreviewKeyDown += (_, e) => { if(e.Key == Key.F2) { e.Handled=true; OpenDictionary(); } };
         ApplyLanguage(false);
         ApplyTheme();
         SourceInitialized += (_,_) => SetTitleTheme();
@@ -50,6 +52,7 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => { KeyboardGuide.StopDemo(); if(session is not null) Guard(() => session.Pause()); };
         Closing += (_, _) => { updateLifetime.Cancel(); KeyboardGuide.StopDemo(); SystemEvents.UserPreferenceChanged -= SystemThemeChanged; if(session is not null) Guard(() => session.Dispose()); SavePrefs(); instanceLock?.Dispose(); };
         SizeChanged += (_, _) => UpdateStats();
+        InputBox.SizeChanged+=(_,_)=>{if(!composing&&session is not null)Render();};
         Loaded += async (_, _) => { ready = true; LoadCatalog(); ApplyLayout(); timer.Start(); await CheckForUpdatesInBackgroundAsync(); };
     }
 
@@ -80,16 +83,17 @@ public partial class MainWindow : Window
         Guard(() => {
             session?.Dispose(); session = null;
             var root = !string.IsNullOrWhiteSpace(prefs.DataRoot) ? prefs.DataRoot : AppContext.BaseDirectory;
-            courses = CourseCatalog.Load(root);
+            courses = CourseCatalog.Load(root).Select(source=>{var target=WubiInput.ForCourse(source);if(!ReferenceEquals(source,target))PracticeSession.MigrateWubiPosition(source,target,Path.Combine(store,"Progress"));return target;}).ToList();
             LoadPersonalPracticeCourses();
+            courses.AddRange(ShuffledPractice.Load(Path.Combine(store,"Shuffled"),courses).ToList());
             var reviews=Path.Combine(store,"Reviews");
             if(Directory.Exists(reviews)) foreach(var file in Directory.EnumerateFiles(reviews,"*.json")) {
-                try {var review=JsonSerializer.Deserialize<Course>(File.ReadAllText(file)); var source=review is null?null:courses.FirstOrDefault(c=>review.Id=="review:"+c.Id); if(review is not null && review.Items.Count>0 && source is not null) {review.InputMode=source.InputMode;review.Group="错键巩固/"+source.Variant;review.TeachingImage=source.TeachingImage;courses.Add(review);}}
+                try {var review=JsonSerializer.Deserialize<Course>(File.ReadAllText(file)); var source=review is null?null:courses.FirstOrDefault(c=>review.Id=="review:"+c.Id); if(review is not null && review.Items.Count>0 && source is not null) {review.Origin=source.Origin;review.SourceUrl=source.SourceUrl;review.Author=source.Author;review.License=source.License;review.InputMode=source.InputMode;review.Group="错键巩固/"+source.Variant;review.TeachingImage=source.TeachingImage;courses.Add(review);}}
                 catch(JsonException) { }
             }
-            var previous = courses.FirstOrDefault(c => c.Id == prefs.LastCourse);
+            var previous = courses.FirstOrDefault(c => c.Id == prefs.LastCourse)??courses.FirstOrDefault(c=>c.InputMode=="wubi-ime"&&c.BaseCourseId==prefs.LastCourse);
             LoadCourseProgress();
-            category = previous?.Category ?? "五笔";
+            category = previous?.Category ?? "英文";
             FilterCourses(previous?.Id);
             File.WriteAllLines(Path.Combine(store,"课程导入说明.txt"),CourseCatalog.Warnings);
             if(courses.Count == 0) { CourseTitle.Text=UiText.T("请选择课程目录", "Choose a course folder", "Choisissez un dossier de cours"); CourseSubtitle.Text=UiText.T("设置 → 课程目录", "Settings → Course folder", "Réglages → Dossier de cours"); InputBox.IsEnabled=false; }
@@ -142,7 +146,7 @@ public partial class MainWindow : Window
             InputMethod.SetIsInputMethodEnabled(InputBox,UsesIme(c));
             UpdateCourseLabels();
             FeedbackLabel.Text=ResumeMessage(session.ResumeNotice);
-            FeedbackLabel.Foreground=Brush("Muted"); Render();
+        FeedbackLabel.Foreground=Brush("Muted"); Render();
             // Do not steal focus while the user is filtering the course list.
             if(!SearchBox.IsKeyboardFocusWithin) InputBox.Focus();
         });
@@ -150,35 +154,34 @@ public partial class MainWindow : Window
     private void Render()
     {
         if(session is null) return;
+        RestartCourseButton.Visibility=session.IsComplete?Visibility.Visible:Visibility.Collapsed;
         var item=session.CurrentItem; var wubi=session.Course.Category=="五笔"; var phonetic=session.Course.InputMode=="pinyin";
         PositionLabel.Text=session.IsComplete ? UiText.T("已完成", "Completed", "Terminé") : $"{session.State.ItemIndex+1:N0} / {session.Course.Items.Count:N0}";
         PromptLabel.FontSize=wubi||phonetic?32:18;
         PromptLabel.Text=item is null ? UiText.T("练习完成", "Practice complete", "Exercice terminé") : wubi||phonetic ? CourseLabels.Prompt(item.Prompt) : "";
         PromptLabel.Visibility=string.IsNullOrEmpty(PromptLabel.Text)?Visibility.Collapsed:Visibility.Visible;
         LessonImage.Visibility=Visibility.Collapsed;
-        if(!string.IsNullOrEmpty(item?.ImagePath)) {var img=LocalImage(item.ImagePath); if(img is not null) {LessonImage.Source=img;LessonImage.Visibility=Visibility.Visible;}}
-        ExpectedLabel.Inlines.Clear();Run? activeRun=null;
-        if(item is not null) {
-            for(int i=0;i<item.Expected.Length;i++) {
-                string t=item.Expected[i]==' ' ? "␣" : item.Expected[i]=='\n' ? "↵" : item.Expected[i].ToString();
-                var run=new Run(t) { Foreground=Brush(i<session.State.CharacterIndex?"Accent":"Ink") };
-                if(i==session.State.CharacterIndex) { run.Background=Brush("Selected"); run.TextDecorations=TextDecorations.Underline; activeRun=run; }
-                ExpectedLabel.Inlines.Add(run);
-            }
+        LessonImage.Source=null;
+        if(!string.IsNullOrEmpty(item?.ImagePath)) {
+            ImageSource? img;
+            if(!VectorRoots.TryLessonImage(item.ImagePath,Brush("Ink"),out img))img=LocalImage(item.ImagePath);
+            if(img is not null) {LessonImage.Source=img;LessonImage.Visibility=Visibility.Visible;}
         }
-        bool introductory=session.Course.Group.Contains("入门") || session.Course.Id.StartsWith("builtin/keyboard/");
+        ExpectedLabel.Inlines.Clear();
+        bool introductory=session.Course.InputMode=="wubi-ime"||session.Course.Group.Contains("入门") || session.Course.Id.StartsWith("builtin/keyboard/");
         NextLabel.Text=session.IsComplete ? "" : introductory||phonetic ? CourseLabels.Hint(item?.Hint ?? "") : "";
         InputBox.IsEnabled=!session.IsComplete;
         if(session.IsComplete) FeedbackLabel.Text="";
-        var concealed=!prefs.ShowHints&&(wubi||phonetic);
+        var concealed=!prefs.ShowHints&&(wubi||phonetic)&&session.Course.InputMode!="wubi-ime";
         if(concealed && item is not null) {ExpectedLabel.Text=session.State.CharacterIndex==0?"…":item.Expected[..session.State.CharacterIndex];NextLabel.Text="";}
+        KeyboardGuide.WubiZones=wubi;
         KeyboardGuide.SetTarget(concealed?null:session.ExpectedCharacter,session.Course.Id.Contains("numpad",StringComparison.OrdinalIgnoreCase));
         KeyboardGuide.InvalidateVisual();
         ApplyLayout();
-        if(item is not null) {InputBox.Text=item.Expected[..session.State.CharacterIndex]; InputBox.CaretIndex=InputBox.Text.Length;}
+        if(item is not null) {alignedTyping.Render(ExpectedLabel,InputBox,item.Expected,session.State.CharacterIndex,session.LastInputCorrect==false?session.LastActual:"");if(concealed)ExpectedLabel.Text="…";}
         SaveLabel.Text="";
         UpdateStats();
-        if(!concealed && activeRun is not null) Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{if(activeRun.Parent is not null && LessonScroll.ScrollableHeight>0) activeRun.BringIntoView();}));
+
     }
     private void UpdateStats()
     {
@@ -187,6 +190,11 @@ public partial class MainWindow : Window
         var elapsed=session.Elapsed;
         StatsLabel.Text=UiText.Format("{0:0} 字符/分    {1:P0} 正确    {2:00}:{3:00}", "{0:0} chars/min    {1:P0} accuracy    {2:00}:{3:00}", "{0:0} car./min    {1:P0} de précision    {2:00}:{3:00}", session.CharactersPerMinute, session.Accuracy, (int)elapsed.TotalMinutes, elapsed.Seconds);
         if(ProgressFill.Parent is FrameworkElement parent) ProgressFill.Width=Math.Max(0,parent.ActualWidth*session.Progress);
+    }
+    private void RestartCourse_Click(object sender,RoutedEventArgs e)
+    {
+        if(session is null)return;
+        Guard(()=>{session.Reset();FeedbackLabel.Text="";Render();InputBox.Focus();});
     }
     private void Input_Text(object sender,TextCompositionEventArgs e)
     {
@@ -201,6 +209,7 @@ public partial class MainWindow : Window
             FeedbackLabel.Text=session.LastInputCorrect==false ? WrongKeyMessage(session.LastActual, session.LastExpected) : "";
             FeedbackLabel.Foreground=Brush(session.LastInputCorrect==false?"Error":"Muted");
             Render();
+            AdvanceAfterCompletion();
         });
     }
     private static string Visible(string value) => UiText.Key(value);
@@ -211,8 +220,8 @@ public partial class MainWindow : Window
         if(composing && UsesIme(session.Course)) return;
         StopDemoForTyping();
         if(e.Key==Key.Back) { e.Handled=true; Guard(()=>{session.Backspace(); InputBox.Clear(); FeedbackLabel.Text=""; Render();}); }
-        else if(e.Key==Key.Space && (!UsesIme(session.Course) || (!composing && session.ExpectedCharacter==' '))) {e.Handled=true; Guard(()=>{lastActivity=DateTime.UtcNow; session.Feed(" "); FeedbackLabel.Text=session.LastInputCorrect==false?WrongKeyMessage(" ",session.LastExpected):""; FeedbackLabel.Foreground=Brush(session.LastInputCorrect==false?"Error":"Muted"); Render();});}
-        else if(e.Key==Key.Enter && session.ExpectedCharacter=='\n') {e.Handled=true; Guard(()=>{lastActivity=DateTime.UtcNow;session.Feed("\n"); Render();});}
+        else if(e.Key==Key.Space && (!UsesIme(session.Course) || (!composing && session.ExpectedCharacter==' '))) {e.Handled=true; Guard(()=>{lastActivity=DateTime.UtcNow; session.Feed(" "); FeedbackLabel.Text=session.LastInputCorrect==false?WrongKeyMessage(" ",session.LastExpected):""; FeedbackLabel.Foreground=Brush(session.LastInputCorrect==false?"Error":"Muted"); Render();AdvanceAfterCompletion();});}
+        else if(e.Key==Key.Enter && session.ExpectedCharacter=='\n') {e.Handled=true; Guard(()=>{lastActivity=DateTime.UtcNow;session.Feed("\n"); Render();AdvanceAfterCompletion();});}
         else if(e.Key==Key.Escape) {e.Handled=true; Guard(()=>session.Pause()); FeedbackLabel.Text="";}
         else if((Keyboard.Modifiers & ModifierKeys.Control)!=0 && e.Key is Key.V or Key.X or Key.Z) e.Handled=true;
     }
@@ -240,6 +249,7 @@ public partial class MainWindow : Window
         bool dark=prefs.Theme!="light";
         if(prefs.Theme=="system") {using var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"); dark=key?.GetValue("AppsUseLightTheme") is int n && n==0;}
         darkTheme=dark; SetTitleTheme();
+        Application.Current.Resources["BrandInk"]=new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark?"#D8F1E9":"#172B2A"));
         var colors=dark?new[]{"#111719","#192225","#111A1D","#E9F0EE","#99ACA8","#304044","#78DCC0","#25483F","#FF9D91"}:new[]{"#EEF2EF","#FFFFFF","#F3F6F3","#182B26","#5C7169","#CCD9D2","#207D63","#D9EDE2","#B73529"};
         var names=new[]{"Bg","Panel","Field","Ink","Muted","Line","Accent","Selected","Error"};
         for(int i=0;i<names.Length;i++) Application.Current.Resources[names[i]]=new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[i]));
@@ -250,7 +260,7 @@ public partial class MainWindow : Window
     private static extern int DwmSetWindowAttribute(IntPtr hwnd,int attribute,ref int value,int size);
     private void SetTitleTheme() {var handle=new WindowInteropHelper(this).Handle; if(handle!=IntPtr.Zero) {int value=darkTheme?1:0; DwmSetWindowAttribute(handle,20,ref value,4);}}
     private void SystemThemeChanged(object sender,UserPreferenceChangedEventArgs e) {if(prefs.Theme=="system") Dispatcher.BeginInvoke(()=>{ApplyTheme();Render();});}
-    private static bool UsesIme(Course course) => course.Category=="中文" && course.InputMode!="pinyin";
+    private static bool UsesIme(Course course) => course.Category=="五笔" || course.Category=="中文" && course.InputMode!="pinyin";
     private void StopDemoForTyping() {if(KeyboardGuide.IsDemonstrating) KeyboardGuide.StopDemo();}
     private void ApplyLayout()
     {
@@ -261,12 +271,13 @@ public partial class MainWindow : Window
         SetButtonLabel(SidebarButton, sidebar?UiText.T("隐藏课程目录", "Hide course list", "Masquer la liste des cours"):UiText.T("显示课程目录", "Show course list", "Afficher la liste des cours"));
         NavigationActions.Visibility=focusMode?Visibility.Collapsed:Visibility.Visible;
         BrandLabel.Visibility=focusMode?Visibility.Collapsed:Visibility.Visible;
+        BrandLogo.Visibility=BrandLabel.Visibility;
         FocusIcon.Kind=focusMode?AppIconKind.ExitFocus:AppIconKind.Focus;
         SetButtonLabel(FocusButton, (focusMode?UiText.T("退出专注", "Exit focus mode", "Quitter la concentration"):UiText.T("专注模式", "Focus mode", "Mode concentration")) + " (F11)");
         CourseSubtitle.Visibility=!sidebar&&!focusMode?Visibility.Visible:Visibility.Collapsed;
         SaveLabel.Visibility=Visibility.Collapsed;
         KeyboardGuide.ShowHands=prefs.ShowHands;
-        KeyboardPanel.Visibility=prefs.ShowKeyboard && (!focusMode||prefs.FocusShowKeyboard) && session is not null && !UsesIme(session.Course)?Visibility.Visible:Visibility.Collapsed;
+        KeyboardPanel.Visibility=prefs.ShowKeyboard && (!focusMode||prefs.FocusShowKeyboard) && session is not null && (!UsesIme(session.Course)||session.Course.Category=="五笔")?Visibility.Visible:Visibility.Collapsed;
         NextLabel.Visibility=prefs.ShowHints&&!focusMode&&!string.IsNullOrEmpty(NextLabel.Text)?Visibility.Visible:Visibility.Collapsed;
         StatsLabel.Visibility=prefs.ShowStats?Visibility.Visible:Visibility.Collapsed;
         PracticeLayout.MaxWidth=sidebar?double.PositiveInfinity:980;
@@ -282,9 +293,11 @@ public partial class MainWindow : Window
         if(session is not null)Guard(()=>session.Pause());
         var summary=UiText.Format("{0} 门课程", "{0} courses", "{0} cours", courses.Count);
         var oldLanguage=UiText.Language;
-        var window=new SettingsWindow(prefs,()=>{if(oldLanguage!=prefs.Language){ApplyLanguage();oldLanguage=UiText.Language;}ApplyTheme();Render();ApplyLayout();SavePrefs();},summary,string.Join("\n",CourseCatalog.Warnings),session?.State.Errors>0){Owner=this};
+        var window=new SettingsWindow(prefs,()=>{if(oldLanguage!=prefs.Language){ApplyLanguage();oldLanguage=UiText.Language;}ApplyTheme();Render();ApplyLayout();SavePrefs();},summary,string.Join("\n",CourseCatalog.Warnings),session?.State.Errors>0,session is not null&&ShuffledPractice.CanShuffle(session.Course)){Owner=this};
         window.ShowDialog();
         switch(window.RequestedAction){
+            case "roots":new RootKeyboardWindow{Owner=this}.Show();break;
+            case "shuffle":Guard(()=>{if(session is null)return;var shuffled=ShuffledPractice.Create(session.Course,Path.Combine(store,"Shuffled"));courses.RemoveAll(c=>c.Id==shuffled.Id);courses.Add(shuffled);FilterCourses(shuffled.Id);session?.Reset();Render();});break;
             case "folder":Folder_Click(this,new RoutedEventArgs());break;
             case "reference":Reference_Click(this,new RoutedEventArgs());break;
             case "demo":focusMode=false;prefs.ShowKeyboard=true;prefs.ShowHands=true;ApplyLayout();KeyboardGuide.ToggleDemo();break;
@@ -302,13 +315,14 @@ public partial class MainWindow : Window
     }
     private void Reference_Click(object sender,RoutedEventArgs e)
     {
+        if(session?.Course.Category=="五笔"){new RootKeyboardWindow(session.Course.Variant.StartsWith("98")?"98":"86"){Owner=this}.Show();return;}
         var index=Path.Combine(AppContext.BaseDirectory,"Teaching","index.json");
         if(!File.Exists(index)) {FeedbackLabel.Text=UiText.T("教学图片尚未就绪。", "Teaching images are unavailable.", "Les images pédagogiques sont indisponibles.");return;}
         var entries=JsonSerializer.Deserialize<List<TeachingReference>>(File.ReadAllText(index))??new();
         var dialog=new Window {Title=UiText.T("原版教学图", "Original teaching images", "Images pédagogiques d’origine"),Width=980,Height=640,Owner=this,WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=Brush("Bg"),Foreground=Brush("Ink")};
         var layout=new DockPanel{Margin=new Thickness(16)};var tabs=new WrapPanel{Margin=new Thickness(0,0,0,12)};DockPanel.SetDock(tabs,Dock.Top);layout.Children.Add(tabs);
         var image=new Image{Stretch=Stretch.Uniform};layout.Children.Add(new ScrollViewer {Content=image,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});
-        foreach(var entry in entries){var button=new Button{Content=ReferenceTitle(entry),Margin=new Thickness(0,0,6,6),Padding=new Thickness(10,6,10,6)};button.Click+=(_,_)=>image.Source=LocalImage("Teaching/"+entry.File);tabs.Children.Add(button);}
+        foreach(var entry in entries){var button=new Button{Content=ReferenceTitle(entry),Margin=new Thickness(0,0,6,6),Padding=new Thickness(10,6,10,6)};button.Click+=(_,_)=>{if(entry.File.Contains("86")||entry.File.Contains("98"))new RootKeyboardWindow(entry.File.Contains("98")?"98":"86"){Owner=dialog}.Show();else image.Source=LocalImage("Teaching/"+entry.File);};tabs.Children.Add(button);}
         if(entries.Count>0) image.Source=LocalImage("Teaching/"+entries[0].File);dialog.Content=layout;dialog.ShowDialog();
     }
 }

@@ -1,7 +1,8 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Sdk = '',
-    [string]$OutputDirectory = ''
+    [string]$OutputDirectory = '',
+    [switch]$ExcludeKingsoft
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -33,8 +34,13 @@ function Copy-ReviewedAssets([string]$Name) {
     }
     Copy-Item -LiteralPath $source -Destination (Join-Path $staging $Name) -Recurse
 }
-Copy-ReviewedAssets 'Data'
-Copy-ReviewedAssets 'Teaching'
+if (!$ExcludeKingsoft) {
+    Copy-ReviewedAssets 'Data'
+    Copy-ReviewedAssets 'Teaching'
+}
+Copy-ReviewedAssets 'Dictionary'
+Copy-ReviewedAssets 'Courses'
+Copy-ReviewedAssets 'Branding'
 foreach ($name in @('README.md', 'ACKNOWLEDGEMENTS.md', 'THIRD-PARTY-NOTICES.md', '使用与测试.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $staging $name)
 }

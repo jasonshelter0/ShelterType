@@ -12,18 +12,19 @@ public sealed class SettingsWindow : Window
     private readonly Action changed;
     private readonly string summary, warnings;
     private readonly bool canReview;
+    private readonly bool canShuffle;
     private bool building;
     private sealed record LanguageChoice(string Code, string Name)
     {
         public override string ToString() => Name;
     }
 
-    public SettingsWindow(Preferences preferences, Action changed, string summary, string warnings, bool canReview)
+    public SettingsWindow(Preferences preferences, Action changed, string summary, string warnings, bool canReview, bool canShuffle=false)
     {
-        this.preferences = preferences; this.changed = changed; this.summary = summary; this.warnings = warnings; this.canReview = canReview;
+        this.preferences = preferences; this.changed = changed; this.summary = summary; this.warnings = warnings; this.canReview = canReview;this.canShuffle=canShuffle;
         Width = 580; Height = 700; MinWidth = 500; MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI"); FontSize = 14;
+        FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 14;
         SetResourceReference(BackgroundProperty, "Bg"); SetResourceReference(ForegroundProperty, "Ink");
         SourceInitialized += (_, _) => AboutWindow.ApplyTitleTheme(this);
         Activated += (_, _) => AboutWindow.ApplyTitleTheme(this);
@@ -93,7 +94,9 @@ public sealed class SettingsWindow : Window
                 button.Margin = new Thickness(0, 0, 8, 8); actions.Children.Add(button);
             }
             ActionButton(UiText.T("课程目录", "Lesson folder", "Dossier des cours"), "folder");
-            ActionButton(UiText.T("原版教学图", "Original diagrams", "Schémas d’origine"), "reference");
+            ActionButton(UiText.T("乱序练习", "Shuffle lesson", "Mélanger le cours"), "shuffle", canShuffle);
+            ActionButton(UiText.T("86 字根键盘", "86 root keyboard", "Clavier des radicaux 86"), "roots");
+            ActionButton(UiText.T("教学参考", "Learning reference", "Référence pédagogique"), "reference");
             ActionButton(UiText.T("指法演示", "Finger demonstration", "Démonstration des doigts"), "demo");
             ActionButton(UiText.T("本课错键巩固", "Review this lesson", "Réviser ce cours"), "review", canReview);
             var reset = Button(UiText.T("本课重新开始", "Restart this lesson", "Recommencer ce cours"), (_, _) => { });

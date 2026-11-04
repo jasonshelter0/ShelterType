@@ -6,6 +6,11 @@ namespace TypeEasy.Core;
 
 public sealed class Course
 {
+    public string Origin { get; set; } = "sheltertype";
+    public string SourceUrl { get; set; } = "";
+    public string Author { get; set; } = "";
+    public string License { get; set; } = "";
+    public string BaseCourseId { get; set; } = "";
     public string Id { get; set; } = "";
     public string Title { get; set; } = "";
     public string Category { get; set; } = "";
@@ -18,6 +23,8 @@ public sealed class Course
 
 public sealed class ExerciseItem
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? KeySequence { get; set; }
     public string Prompt { get; set; } = "";
     public string Expected { get; set; } = "";
     public string Hint { get; set; } = "";
@@ -40,7 +47,7 @@ public static class CourseCatalog
         ["High"] = "高中词汇", ["Middle"] = "初中词汇", ["TOEFL"] = "托福", ["GRE"] = "GRE", ["GMAT"] = "GMAT"
     };
 
-    public static List<Course> Load(string root)
+    public static List<Course> Load(string root, bool includeKingsoft = true)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Warnings.Clear();
@@ -54,14 +61,19 @@ public static class CourseCatalog
             LoadChinese(data, courses);
             LoadPinyin(data, courses);
         }
+        foreach(var course in courses) course.Origin="kingsoft-2008";
         // A missing or moved resource directory must not leave an empty application.
         // These fallback IDs are independent of imported course IDs and saved progress.
         if (courses.Count == 0) courses.AddRange(BeginnerLessons.CreateFallbackWubi());
         courses.AddRange(BeginnerLessons.Create());
         courses.AddRange(BeginnerLessons.CreateRootLessons(data));
         courses.AddRange(BeginnerLessons.CreateRootDrills(data));
+        foreach(var course in courses.Where(c=>c.Items.Any(i=>i.ImagePath.StartsWith("Teaching/"))))course.Origin="kingsoft-2008";
         foreach (var course in courses.Where(c => c.Category == "五笔" && c.TeachingImage.Length == 0))
             course.TeachingImage = "Teaching/wubi" + (course.Variant.StartsWith("98") ? "98" : "86") + "-keyboard.png";
+        var publicPath=Path.Combine(root,"Courses","public-articles.json");
+        if(File.Exists(publicPath)) TryLoad(publicPath,()=>courses.AddRange(JsonSerializer.Deserialize<List<Course>>(File.ReadAllText(publicPath))??new()));
+        if(!includeKingsoft){courses.RemoveAll(c=>c.Origin=="kingsoft-2008");foreach(var course in courses)course.TeachingImage="";}
         CourseGrouping.Assign(courses);
         return courses;
     }

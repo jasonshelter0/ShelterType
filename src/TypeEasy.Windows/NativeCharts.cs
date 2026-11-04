@@ -12,7 +12,7 @@ internal static class StatsUi
     public static void Window(Window window, string title, double width=1000, double height=790)
     {
         window.Title=title; window.Width=width; window.Height=height; window.MinWidth=820;window.MinHeight=620;
-        window.FontFamily=new FontFamily("Microsoft YaHei UI, Segoe UI");window.FontSize=14;
+        window.FontFamily=new FontFamily("Microsoft YaHei UI");window.FontSize=14;
         window.Language=XmlLanguage.GetLanguage(UiText.Culture.IetfLanguageTag);
         window.WindowStartupLocation=WindowStartupLocation.CenterOwner;
         window.SetResourceReference(Control.BackgroundProperty,"Bg");window.SetResourceReference(Control.ForegroundProperty,"Ink");
@@ -28,7 +28,9 @@ internal static class StatsUi
     }
     public static TextBlock Text(string text,double size=14,string color="Ink")
     {
-        var t=new TextBlock{Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap};t.SetResourceReference(TextBlock.ForegroundProperty,color);return t;
+        var t=new TextBlock{Text=text,FontFamily=new FontFamily("Microsoft YaHei UI"),FontSize=size,TextWrapping=TextWrapping.Wrap,LineHeight=size*1.55,UseLayoutRounding=true};
+        TextOptions.SetTextFormattingMode(t,TextFormattingMode.Display);
+        t.SetResourceReference(TextBlock.ForegroundProperty,color);return t;
     }
     public static Button Button(string text,RoutedEventHandler click)
     {var b=new Button{Content=text,Margin=new Thickness(0,0,8,0)};b.Click+=click;return b;}

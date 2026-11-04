@@ -13,7 +13,7 @@ public partial class MainWindow
         var repository = PersonalPracticeStore();
         var saved = repository.Load();
         courses.RemoveAll(c => c.Id.StartsWith("personal:", StringComparison.Ordinal));
-        courses.AddRange(saved.Select(p => p.Course));
+        courses.AddRange(saved.Select(p => WubiInput.ForCourse(p.Course)));
         if (repository.RecoveryNotice is not null)
         {
             StatusLabel.Text = UiText.T("部分专属练习未能读取，原记录已保留。", "Some personal practice could not be read. Existing records were kept.", "Certains exercices ciblés sont illisibles. Les données existantes ont été conservées.");
@@ -49,10 +49,11 @@ public partial class MainWindow
 
             var selected = repository.Save(window.SelectedPlan, progressDirectory, window.StartNewRound);
             LoadPersonalPracticeCourses();
-            category = selected.Course.Category;
+            var selectedCourse=WubiInput.ForCourse(selected.Course);
+            category = selectedCourse.Category;
             rebuildingCourses = true;
             try { SearchBox.Clear(); } finally { rebuildingCourses = false; }
-            FilterCourses(selected.Course.Id);
+            FilterCourses(selectedCourse.Id);
         });
     }
 }

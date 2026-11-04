@@ -26,6 +26,8 @@ public static class UiText
         "chinese" => Mode("中文输入"),
         "wubi86" => Mode("五笔86版"),
         "wubi98" => Mode("五笔98版"),
+        "五笔86版中文输入" => T("五笔86 中文输入","Wubi 86 Chinese input","Wubi 86 saisie chinoise"),
+        "五笔98版中文输入" => T("五笔98 中文输入","Wubi 98 Chinese input","Wubi 98 saisie chinoise"),
         "五笔" => T("五笔", "Wubi", "Wubi"),
         "英文" => T("英文", "English", "Anglais"),
         "中文" or "中文输入" => T(raw, "Chinese", "Chinois"),

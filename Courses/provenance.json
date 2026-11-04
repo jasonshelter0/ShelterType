@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "groups": [
+    {
+      "origin": "kingsoft-2008",
+      "paths": [
+        "Data/",
+        "Teaching/"
+      ],
+      "derivedUses": [
+        "Imported courses",
+        "Root learning/drill images",
+        "VectorRoots traced outlines",
+        "dev/unicode-review: embedded original glyph samples, development review only; never packaged"
+      ],
+      "removal": "package.ps1 -ExcludeKingsoft; CourseCatalog.Load(root, includeKingsoft: false)"
+    },
+    {
+      "origin": "public-domain",
+      "paths": [
+        "Courses/public-articles.json"
+      ],
+      "metadata": [
+        "Author",
+        "SourceUrl",
+        "License"
+      ],
+      "transformations": [
+        "Paragraph excerpts",
+        "Whitespace normalization",
+        "English curly quotes and dashes converted to keyboard punctuation",
+        "Simplified Chinese Wikisource view"
+      ]
+    },
+    {
+      "origin": "jason-wubi86",
+      "paths": [
+        "Dictionary/",
+        "src/TypeEasy.Core/Dictionary/"
+      ],
+      "note": "Integrated dictionary only; original WindowsAppSDK/WebView UI and binaries are not included"
+    },
+    {
+      "origin": "sheltertype",
+      "paths": [
+        "src/TypeEasy.Core/BeginnerLessons.cs"
+      ],
+      "note": "Authored exercises only; root-image courses in this file remain kingsoft-2008"
+    }
+  ]
+}

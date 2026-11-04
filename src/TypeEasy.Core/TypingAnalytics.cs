@@ -6,6 +6,7 @@ namespace TypeEasy.Core;
 public static class TypingMode
 {
     public static string ForCourse(Course course) => course.InputMode == "pinyin" ? "拼音编码"
+        : course.InputMode == "wubi-ime" ? "五笔"+course.Variant+"中文输入"
         : course.Category == "五笔" ? "五笔" + course.Variant
         : course.Category == "中文" ? "中文输入"
         : course.Id.Contains("numpad", StringComparison.OrdinalIgnoreCase) ? "数字键盘" : "英文";
