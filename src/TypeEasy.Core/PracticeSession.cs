@@ -104,6 +104,7 @@ public sealed class PracticeSession : IDisposable
     public int TotalCharacters => _characterOffsets[^1];
     public int CompletedCharacters => _characterOffsets[State.ItemIndex] + State.CharacterIndex;
     public double Progress => TotalCharacters == 0 ? 1 : (double)CompletedCharacters / TotalCharacters;
+    public CourseProgressSummary ProgressSummary => CourseProgressSummary.FromState(State, CompletedCharacters, TotalCharacters, IsComplete);
     public double CharactersPerMinute => Elapsed.TotalMinutes <= 0 ? 0 : State.CorrectInputs / Elapsed.TotalMinutes;
 
     private PracticeSession(Course course, string dataDirectory, string? analyticsDirectory, string? heatmapDirectory, ITypingClock? timingClock)
@@ -121,44 +122,84 @@ public sealed class PracticeSession : IDisposable
         for (var i = 0; i < course.Items.Count; i++)
             _characterOffsets[i + 1] = checked(_characterOffsets[i] + course.Items[i].Expected.Length);
         Directory.CreateDirectory(dataDirectory);
-        _path = Path.Combine(dataDirectory, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(course.Id))).ToLowerInvariant() + ".json");
-        State = NewState();
-        if (File.Exists(_path))
-        {
-            var loaded = TryRead(_path);
-            if (loaded is null)
-            {
-                loaded = TryRead(_path + ".bak");
-                ResumeNotice = loaded is null ? "进度文件和备份无法读取，已开始新练习。" : "进度文件损坏，已从最近的备份恢复。";
-            }
-            if (loaded is not null)
-            {
-                if (loaded.CourseId != course.Id || loaded.Fingerprint != State.Fingerprint)
-                    ResumeNotice = "课程内容已变化，已开始新进度，避免接续到错误位置。";
-                else if (ValidState(loaded))
-                    State = loaded;
-                else
-                {
-                    var backup = TryRead(_path + ".bak");
-                    if (backup is not null && backup.CourseId == course.Id && backup.Fingerprint == State.Fingerprint && ValidState(backup))
-                    {
-                        State = backup;
-                        ResumeNotice = "保存的进度无效，已从最近的备份恢复。";
-                    }
-                    else ResumeNotice = "保存的进度位置无效，已开始新练习。";
-                }
-            }
-        }
+        _path = ProgressPath(course, dataDirectory);
+        State = ReadSavedState(course, _path, out var notice);
+        ResumeNotice = notice;
         SkipEmptyItems();
     }
 
     public static PracticeSession Open(Course course, string dataDirectory, string? analyticsDirectory = null,
         string? heatmapDirectory = null, ITypingClock? timingClock = null) => new(course, dataDirectory, analyticsDirectory, heatmapDirectory, timingClock);
 
-    private PracticeState NewState() => new()
+    /// <summary>
+    /// Reads the same validated checkpoint used by Open without opening a session, creating a
+    /// directory, or writing a checkpoint. I/O failures are reported as Unknown rather than 0%.
+    /// </summary>
+    public static CourseProgressSummary ReadProgress(Course course, string dataDirectory)
     {
-        CourseId = Course.Id,
-        Fingerprint = Fingerprint(Course),
+        ArgumentNullException.ThrowIfNull(course);
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
+        var total = course.Items.Sum(item => item.Expected.Length);
+        try
+        {
+            var path = ProgressPath(course, dataDirectory);
+            // Most courses have never been opened. Avoid serializing their contents merely
+            // to discover that no saved checkpoint needs fingerprint validation.
+            if (!CheckpointExists(path)) return new(total == 0 ? CourseProgressStatus.Completed : CourseProgressStatus.NotStarted, 0, total);
+            var state = ReadSavedState(course, path, out _);
+            var index = state.ItemIndex;
+            while (index < course.Items.Count && course.Items[index].Expected.Length == 0) index++;
+            var completed = state.CharacterIndex;
+            for (var i = 0; i < index; i++) completed = checked(completed + course.Items[i].Expected.Length);
+            return CourseProgressSummary.FromState(state, completed, total, index >= course.Items.Count);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return new(CourseProgressStatus.Unknown, 0, total);
+        }
+    }
+
+    private static string ProgressPath(Course course, string dataDirectory)
+        => Path.Combine(dataDirectory, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(course.Id))).ToLowerInvariant() + ".json");
+
+    private static PracticeState ReadSavedState(Course course, string path, out string? notice)
+    {
+        var state = CreateState(course);
+        notice = null;
+        if (CheckpointExists(path))
+        {
+            var loaded = TryRead(path);
+            if (loaded is null)
+            {
+                loaded = TryRead(path + ".bak");
+                notice = loaded is null ? "进度文件和备份无法读取，已开始新练习。" : "进度文件损坏，已从最近的备份恢复。";
+            }
+            if (loaded is not null)
+            {
+                if (loaded.CourseId != course.Id || loaded.Fingerprint != state.Fingerprint)
+                    notice = "课程内容已变化，已开始新进度，避免接续到错误位置。";
+                else if (ValidState(course, loaded))
+                    state = loaded;
+                else
+                {
+                    var backup = TryRead(path + ".bak");
+                    if (backup is not null && backup.CourseId == course.Id && backup.Fingerprint == state.Fingerprint && ValidState(course, backup))
+                    {
+                        state = backup;
+                        notice = "保存的进度无效，已从最近的备份恢复。";
+                    }
+                    else notice = "保存的进度位置无效，已开始新练习。";
+                }
+            }
+        }
+        return state;
+    }
+
+    private PracticeState NewState() => CreateState(Course);
+    private static PracticeState CreateState(Course course) => new()
+    {
+        CourseId = course.Id,
+        Fingerprint = Fingerprint(course),
         UpdatedAt = DateTimeOffset.UtcNow
     };
 
@@ -173,18 +214,31 @@ public sealed class PracticeSession : IDisposable
     {
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<PracticeState>(File.ReadAllText(path, Encoding.UTF8)) : null;
+            return CheckpointExists(path) ? JsonSerializer.Deserialize<PracticeState>(File.ReadAllText(path, Encoding.UTF8)) : null;
         }
         catch (JsonException) { return null; }
         // Access and disk failures are surfaced to the caller, rather than silently losing progress.
     }
 
-    private bool ValidState(PracticeState state)
+    private static bool CheckpointExists(string path)
     {
-        return state.SchemaVersion == 1 && state.ItemIndex >= 0 && state.ItemIndex <= Course.Items.Count
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.Directory) != 0)
+                throw new IOException("A directory occupies the progress checkpoint path.");
+            return true;
+        }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+    }
+
+    private bool ValidState(PracticeState state) => ValidState(Course, state);
+    private static bool ValidState(Course course, PracticeState state)
+    {
+        return state.SchemaVersion == 1 && state.ItemIndex >= 0 && state.ItemIndex <= course.Items.Count
             && state.CharacterIndex >= 0
-            && (state.ItemIndex == Course.Items.Count ? state.CharacterIndex == 0
-                : state.CharacterIndex < Math.Max(1, Course.Items[state.ItemIndex].Expected.Length))
+            && (state.ItemIndex == course.Items.Count ? state.CharacterIndex == 0
+                : state.CharacterIndex < Math.Max(1, course.Items[state.ItemIndex].Expected.Length))
             && state.TotalInputs >= 0 && state.CorrectInputs >= 0 && state.Errors >= 0
             && state.CorrectInputs <= state.TotalInputs && state.Errors == state.TotalInputs - state.CorrectInputs
             && double.IsFinite(state.ElapsedSeconds) && state.ElapsedSeconds >= 0
@@ -193,7 +247,7 @@ public sealed class PracticeSession : IDisposable
             && state.Confusions.All(x => x is not null && x.Expected is not null && x.Actual is not null && x.Count >= 0)
             && state.Keys.All(x => x is not null && x.Key is not null && x.Attempts >= 0 && x.Errors >= 0 && x.Errors <= x.Attempts)
             && state.Pairs.All(x => x is not null && x.Pair is not null && x.Attempts >= 0 && x.Errors >= 0 && x.Errors <= x.Attempts)
-            && state.Items.All(x => x is not null && x.ItemIndex >= 0 && x.ItemIndex < Course.Items.Count && x.Attempts >= 0 && x.Errors >= 0 && x.Errors <= x.Attempts);
+            && state.Items.All(x => x is not null && x.ItemIndex >= 0 && x.ItemIndex < course.Items.Count && x.Attempts >= 0 && x.Errors >= 0 && x.Errors <= x.Attempts);
     }
 
     public void Resume()

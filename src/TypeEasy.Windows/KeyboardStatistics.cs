@@ -5,6 +5,19 @@ namespace TypeEasy.Windows;
 public enum KeyboardMetric { Frequency, Errors, ErrorRate, Confusions, Context }
 public sealed record KeyboardHeatValue(double Value, bool HasData, bool LowSample, string Tooltip);
 
+/// <summary>A single observed expected-to-actual relation. Context and aggregate views are kept separate.</summary>
+public sealed record KeyboardErrorPath(string Mode, string Expected, string Actual, long Count, ContextRisk? Context)
+{
+    public string Id => System.Text.Json.JsonSerializer.Serialize(new[] { Mode, Expected, Actual, Context is null ? "aggregate" : "context", Context?.Before, Context?.After });
+    public string ExpectedId => KeyboardStatistics.KeyId(Mode, Expected);
+    public string ActualId => KeyboardStatistics.KeyId(Mode, Actual);
+    public string? ExpectedPhysicalKey => KeyboardStatistics.PhysicalKey(Mode, Expected);
+    public string? ActualPhysicalKey => KeyboardStatistics.PhysicalKey(Mode, Actual);
+    public bool ExpectedRequiresShift => ExpectedPhysicalKey is not null && FingerGuide.Lookup(Expected[0], Mode == "数字键盘")?.RequiresShift == true;
+    public bool ActualCharacterRequiresShift => ActualPhysicalKey is not null && FingerGuide.Lookup(Actual[0], Mode == "数字键盘")?.RequiresShift == true;
+    public bool MatchesKey(string id) => ExpectedId == id || ActualId == id;
+}
+
 public sealed class KeyboardKeySummary
 {
     public string KeyId { get; init; } = "";
@@ -44,6 +57,21 @@ public sealed class KeyboardKeySummary
 /// <summary>Read-only aggregation of submitted text and expected opportunities onto standard key positions.</summary>
 public static class KeyboardStatistics
 {
+    public static string KeyId(string mode, string value) => PhysicalKey(mode, value) ?? "text:" + mode + ":" + value;
+
+    public static IReadOnlyList<KeyboardErrorPath> ContextPaths(IEnumerable<ContextRisk> contexts, string? mode = null)
+        => OrderPaths(contexts.Where(c => mode is null || c.Mode == mode).SelectMany(c => c.ActualCounts
+            .Where(a => a.Key != c.Expected && a.Value > 0)
+            .Select(a => new KeyboardErrorPath(c.Mode, c.Expected, a.Key, a.Value, c))));
+
+    public static IReadOnlyList<KeyboardErrorPath> AggregatePaths(IEnumerable<TypingConfusion> confusions, string? mode = null)
+        => OrderPaths(confusions.Where(c => (mode is null || c.Mode == mode) && c.Expected != c.Actual && c.Count > 0)
+            .Select(c => new KeyboardErrorPath(c.Mode, c.Expected, c.Actual, c.Count, null)));
+
+    private static IReadOnlyList<KeyboardErrorPath> OrderPaths(IEnumerable<KeyboardErrorPath> paths)
+        => paths.OrderByDescending(p => p.Count).ThenBy(p => p.Mode, StringComparer.Ordinal).ThenBy(p => p.Expected, StringComparer.Ordinal)
+            .ThenBy(p => p.Actual, StringComparer.Ordinal).ThenBy(p => p.Context?.Before, StringComparer.Ordinal).ThenBy(p => p.Context?.After, StringComparer.Ordinal).ToArray();
+
     public static string? PhysicalKey(string mode, string value)
     {
         // IME commits do not reveal physical keys, even when the committed character is ASCII.
@@ -58,7 +86,7 @@ public static class KeyboardStatistics
         KeyboardKeySummary Bucket(string sourceMode,string value)
         {
             var physical = PhysicalKey(sourceMode,value);
-            var id = physical ?? "text:" + sourceMode + ":" + value;
+            var id = KeyId(sourceMode,value);
             if (!buckets.TryGetValue(id,out var bucket)) buckets[id] = bucket = new()
                 { KeyId=id,Unmapped=physical is null,Label=physical ?? value };
             return bucket;

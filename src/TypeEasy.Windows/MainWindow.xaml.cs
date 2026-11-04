@@ -81,12 +81,14 @@ public partial class MainWindow : Window
             session?.Dispose(); session = null;
             var root = !string.IsNullOrWhiteSpace(prefs.DataRoot) ? prefs.DataRoot : AppContext.BaseDirectory;
             courses = CourseCatalog.Load(root);
+            LoadPersonalPracticeCourses();
             var reviews=Path.Combine(store,"Reviews");
             if(Directory.Exists(reviews)) foreach(var file in Directory.EnumerateFiles(reviews,"*.json")) {
                 try {var review=JsonSerializer.Deserialize<Course>(File.ReadAllText(file)); var source=review is null?null:courses.FirstOrDefault(c=>review.Id=="review:"+c.Id); if(review is not null && review.Items.Count>0 && source is not null) {review.InputMode=source.InputMode;review.Group="错键巩固/"+source.Variant;review.TeachingImage=source.TeachingImage;courses.Add(review);}}
                 catch(JsonException) { }
             }
             var previous = courses.FirstOrDefault(c => c.Id == prefs.LastCourse);
+            LoadCourseProgress();
             category = previous?.Category ?? "五笔";
             FilterCourses(previous?.Id);
             File.WriteAllLines(Path.Combine(store,"课程导入说明.txt"),CourseCatalog.Warnings);
@@ -96,10 +98,12 @@ public partial class MainWindow : Window
     private void FilterCourses(string? selectedId = null, bool openSelected = true)
     {
         if(!ready || rebuildingCourses) return;
+        RefreshActiveCourseProgress();
         var query=SearchBox.Text.Trim();
         var visible=courses.Where(c=>c.Category == category && (c.Title.Contains(query,StringComparison.OrdinalIgnoreCase) || c.Variant.Contains(query,StringComparison.OrdinalIgnoreCase) || c.Group.Contains(query,StringComparison.OrdinalIgnoreCase) || CourseLabels.Path(c).Contains(query,StringComparison.CurrentCultureIgnoreCase))).ToList();
         var chosen=visible.FirstOrDefault(c=>c.Id==selectedId) ?? visible.FirstOrDefault(c=>c.Group.Contains("入门")) ?? visible.FirstOrDefault();
         var roots=new List<CourseNode>();
+        visibleCourseNodes.Clear();
         foreach(var course in visible) {
             var nodes=roots;
             foreach(var part in (string.IsNullOrEmpty(course.Group)?"其他课程":course.Group).Split('/')) {
@@ -108,9 +112,12 @@ public partial class MainWindow : Window
                 if(course==chosen || query.Length>0) group.Expanded=true;
                 nodes=group.Children;
             }
-            nodes.Add(new CourseNode {Key=course.Id,Title=CourseLabels.Title(course),Description=CourseLabels.Path(course),Course=course,Selected=course==chosen});
+            var node = new CourseNode {Key=course.Id,Title=CourseLabels.Title(course),Description=CourseLabels.Path(course),Course=course,Selected=course==chosen};
+            node.SetProgress(ProgressFor(course));
+            visibleCourseNodes[course.Id] = node;
+            nodes.Add(node);
         }
-        void SortGroups(List<CourseNode> nodes) {int Rank(CourseNode n)=>n.Course is not null?3:n.Key.Contains("入门")?0:n.Key.Contains("拼音")||n.Key.Contains("键盘")?1:2;var ordered=nodes.OrderBy(Rank).ToList();nodes.Clear();nodes.AddRange(ordered);foreach(var node in nodes) SortGroups(node.Children);}
+        void SortGroups(List<CourseNode> nodes) {int Rank(CourseNode n)=>n.Course is not null?4:n.Key=="专属练习"?0:n.Key.Contains("入门")?1:n.Key.Contains("拼音")||n.Key.Contains("键盘")?2:3;var ordered=nodes.OrderBy(Rank).ToList();nodes.Clear();nodes.AddRange(ordered);foreach(var node in nodes) SortGroups(node.Children);}
         SortGroups(roots);
         rebuildingCourses=true;
         try { CourseTree.ItemsSource=roots; } finally { rebuildingCourses=false; }
@@ -128,6 +135,7 @@ public partial class MainWindow : Window
         if(session?.Course==c) return;
         Guard(()=> {
             KeyboardGuide.StopDemo();
+            RefreshActiveCourseProgress();
             session?.Dispose(); session=PracticeSession.Open(c,Path.Combine(store,"Progress"),Path.Combine(store,"Analytics"),Path.Combine(store,"Heatmaps")); composing=false;
             ExerciseScroll.ScrollToTop();LessonScroll.ScrollToTop();
             prefs.LastCourse=c.Id; SavePrefs(); InputBox.IsEnabled=true; InputBox.Text="";
@@ -175,6 +183,7 @@ public partial class MainWindow : Window
     private void UpdateStats()
     {
         if(session is null || StatsLabel is null) return;
+        RefreshActiveCourseProgress();
         var elapsed=session.Elapsed;
         StatsLabel.Text=UiText.Format("{0:0} 字符/分    {1:P0} 正确    {2:00}:{3:00}", "{0:0} chars/min    {1:P0} accuracy    {2:00}:{3:00}", "{0:0} car./min    {1:P0} de précision    {2:00}:{3:00}", session.CharactersPerMinute, session.Accuracy, (int)elapsed.TotalMinutes, elapsed.Seconds);
         if(ProgressFill.Parent is FrameworkElement parent) ProgressFill.Width=Math.Max(0,parent.ActualWidth*session.Progress);
@@ -248,10 +257,12 @@ public partial class MainWindow : Window
         bool sidebar=prefs.ShowSidebar&&!focusMode;
         SidebarPanel.Visibility=sidebar?Visibility.Visible:Visibility.Collapsed;
         SidebarColumn.Width=new GridLength(sidebar?260:0);SidebarGap.Width=new GridLength(sidebar?20:0);
-        SidebarButton.Content=sidebar?UiText.T("☰ 课程", "☰ Courses", "☰ Cours"):"☰";
+        SidebarIcon.Kind=sidebar?AppIconKind.SidebarOpen:AppIconKind.SidebarClosed;
+        SetButtonLabel(SidebarButton, sidebar?UiText.T("隐藏课程目录", "Hide course list", "Masquer la liste des cours"):UiText.T("显示课程目录", "Show course list", "Afficher la liste des cours"));
         NavigationActions.Visibility=focusMode?Visibility.Collapsed:Visibility.Visible;
         BrandLabel.Visibility=focusMode?Visibility.Collapsed:Visibility.Visible;
-        FocusButton.Content=focusMode?UiText.T("退出专注", "Exit focus", "Quitter"):UiText.T("专注", "Focus", "Concentration");
+        FocusIcon.Kind=focusMode?AppIconKind.ExitFocus:AppIconKind.Focus;
+        SetButtonLabel(FocusButton, (focusMode?UiText.T("退出专注", "Exit focus mode", "Quitter la concentration"):UiText.T("专注模式", "Focus mode", "Mode concentration")) + " (F11)");
         CourseSubtitle.Visibility=!sidebar&&!focusMode?Visibility.Visible:Visibility.Collapsed;
         SaveLabel.Visibility=Visibility.Collapsed;
         KeyboardGuide.ShowHands=prefs.ShowHands;
@@ -302,7 +313,6 @@ public partial class MainWindow : Window
     }
 }
 public sealed class TeachingReference {public string Title {get;set;}=""; public string File {get;set;}="";}
-public sealed class CourseNode {public string Key {get;set;}=""; public string Title {get;set;}=""; public string? Description {get;set;} public Course? Course {get;set;} public List<CourseNode> Children {get;set;}=new();public bool Expanded {get;set;} public bool Selected {get;set;}}
 public sealed class Preferences
 {
     public bool CheckForUpdates {get;set;}=true;

@@ -8,6 +8,8 @@ public static class CourseLabels
 {
     private static readonly Dictionary<string, (string En, string Fr)> Names = new(StringComparer.Ordinal)
     {
+        ["专属练习"]=("Personal practice","Exercices ciblés"), ["易混输入"]=("Confusion practice","Saisies à distinguer"), ["语境巩固"]=("Context practice","Révision en contexte"),
+        ["五笔86版"]=("Wubi 86","Wubi 86"), ["五笔98版"]=("Wubi 98","Wubi 98"), ["拼音编码"]=("Pinyin codes","Codes pinyin"), ["中文输入"]=("Chinese input","Saisie chinoise"),
         ["五笔"]=("Wubi","Wubi"), ["英文"]=("English","Anglais"), ["中文"]=("Chinese","Chinois"),
         ["86版"]=("86","86"), ["98版"]=("98","98"), ["单字"]=("Characters","Caractères"), ["词组"]=("Phrases","Mots composés"),
         ["入门"]=("Getting started","Premiers pas"), ["入门指法"]=("Touch-typing basics","Bases de la dactylographie"),
@@ -83,7 +85,7 @@ public static class CourseLabels
     public static string ContextTitle(Course course)
     {
         var fragments = course.Group.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Where(s => !Regex.IsMatch(s, @"^第\s*\d+.*课$")).ToArray();
-        var last = fragments.Contains("错键巩固") ? "错键巩固" : fragments.LastOrDefault() ?? course.Variant;
+        var last = fragments.Contains("专属练习") ? "专属练习" : fragments.Contains("错键巩固") ? "错键巩固" : fragments.LastOrDefault() ?? course.Variant;
         var prefix = course.Category == "五笔" ? UiText.Mode(course.Category + course.Variant) : Word(course.Category);
         var context = string.Join(" / ", new[] { prefix, Group(last) }.Where(s => s.Length > 0).Distinct());
         return Title(course) + (context.Length == 0 ? "" : UiText.T("（", " (", " (") + context + UiText.T("）", ")", ")"));

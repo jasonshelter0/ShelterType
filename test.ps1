@@ -12,7 +12,7 @@ if (!$Sdk) {
 }
 if (!$CourseRoot) { $CourseRoot = $PSScriptRoot }
 $CourseRoot = [IO.Path]::GetFullPath($CourseRoot)
-$names = @('TypeEasy.Core.Tests', 'TypeEasy.Analytics.Tests', 'TypeEasy.Heatmap.Tests', 'TypeEasy.FingerGuide.Tests', 'TypeEasy.ReviewMetadata.Tests', 'TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests')
+$names = @('TypeEasy.Core.Tests', 'TypeEasy.Progress.Tests', 'TypeEasy.Analytics.Tests', 'TypeEasy.KeyboardStatistics.Tests', 'TypeEasy.PersonalPractice.Tests', 'TypeEasy.Heatmap.Tests', 'TypeEasy.FingerGuide.Tests', 'TypeEasy.ReviewMetadata.Tests', 'TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests')
 if ($IncludeUpdate) { $names += 'ShelterType.Update.Tests' }
 $config = Join-Path $PSScriptRoot 'NuGet.Config'
 foreach ($name in $names) {
@@ -36,7 +36,7 @@ foreach ($name in $names) {
     if ($probeExitCode -ne 1 -or ($probe -join "`n") -notmatch '\(caught\)') { throw "Failure boundary was not verified: $name" }
     Write-Host "Failure boundary verified: $name"
     $testArguments = @()
-    if ($name -in @('TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests')) { $testArguments = @($CourseRoot) }
+    if ($name -in @('TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests', 'TypeEasy.PersonalPractice.Tests')) { $testArguments = @($CourseRoot) }
     & $Sdk $assembly @testArguments
     if ($LASTEXITCODE) { throw "Tests failed: $name" }
 }

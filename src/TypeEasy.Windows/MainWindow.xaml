@@ -2,16 +2,28 @@
  <Grid x:Name="RootLayout" Margin="24,16">
   <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <StackPanel Orientation="Horizontal" VerticalAlignment="Top"><Button x:Name="SidebarButton" Content="☰ 课程" Click="Sidebar_Click" Padding="12,8" Margin="0,0,18,0" ToolTip="显示或隐藏课程目录"/><TextBlock x:Name="BrandLabel" Text="打字练习" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel>
-   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><StackPanel x:Name="NavigationActions" Orientation="Horizontal"><Button x:Name="SpeedButton" Content="测速" Click="Speed_Click" Margin="0,0,8,0"/><Button x:Name="StatisticsButton" Content="统计" Click="Statistics_Click" Margin="0,0,8,0"/></StackPanel><Button x:Name="FocusButton" Content="专注" Click="Focus_Click" Margin="0,0,8,0" ToolTip="F11"/><Button x:Name="SettingsButton" Content="设置" Click="Settings_Click"/></StackPanel>
+   <StackPanel Orientation="Horizontal" VerticalAlignment="Top"><Button x:Name="SidebarButton" Click="Sidebar_Click" Style="{StaticResource ToolbarIconButton}" Margin="0,0,16,0"><local:AppIcon x:Name="SidebarIcon" Kind="SidebarOpen"/></Button><TextBlock x:Name="BrandLabel" Text="ShelterType" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/></StackPanel>
+   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><StackPanel x:Name="NavigationActions" Orientation="Horizontal"><Button x:Name="SpeedButton" Click="Speed_Click" Style="{StaticResource ToolbarIconButton}" Margin="0,0,8,0"><local:AppIcon Kind="SpeedTest"/></Button><Button x:Name="StatisticsButton" Click="Statistics_Click" Style="{StaticResource ToolbarIconButton}" Margin="0,0,8,0"><local:AppIcon Kind="Statistics"/></Button></StackPanel><Button x:Name="FocusButton" Click="Focus_Click" Style="{StaticResource ToolbarIconButton}" Margin="0,0,8,0"><local:AppIcon x:Name="FocusIcon" Kind="Focus"/></Button><Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource ToolbarIconButton}"><local:AppIcon Kind="Settings"/></Button></StackPanel>
   </Grid>
   <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="260"/><ColumnDefinition x:Name="SidebarGap" Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <Border x:Name="SidebarPanel" Background="{DynamicResource Panel}" CornerRadius="10" Padding="14"><DockPanel>
     <StackPanel DockPanel.Dock="Top">
      <UniformGrid Columns="3" Margin="0,0,0,12"><Button x:Name="WubiTab" Content="五笔" Tag="五笔" Click="Category_Click" Padding="8,8" Margin="0,0,4,0"/><Button x:Name="EnglishTab" Content="英文" Tag="英文" Click="Category_Click" Padding="8,8" Margin="0,0,4,0"/><Button x:Name="ChineseTab" Content="中文" Tag="中文" Click="Category_Click" Padding="8,8"/></UniformGrid>
      <Grid Margin="0,0,0,10"><TextBox x:Name="SearchBox" TextChanged="Search_Changed" AutomationProperties.Name="搜索课程"/><TextBlock x:Name="SearchPlaceholder" Text="搜索课程" Foreground="{DynamicResource Muted}" Margin="11,8" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text,ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Grid>
+     <Button x:Name="PersonalPracticeButton" Content="专属练习" Click="PersonalPractice_Click" HorizontalContentAlignment="Left" Margin="0,0,0,10" Padding="10,7"/>
     </StackPanel>
-    <TreeView x:Name="CourseTree" SelectedItemChanged="Course_Changed" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}"><TextBlock Text="{Binding Title}" ToolTip="{Binding Description}" TextWrapping="Wrap" FontSize="13"/></HierarchicalDataTemplate></TreeView.ItemTemplate></TreeView>
+    <TreeView x:Name="CourseTree" SelectedItemChanged="Course_Changed" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+     <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}">
+      <Grid ToolTip="{Binding ToolTipText}" AutomationProperties.Name="{Binding AccessibleName}">
+       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ProgressVisibility}">
+        <TextBlock Text="{Binding PercentText}" FontSize="10" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+        <local:CourseProgressIndicator Status="{Binding Progress.Status}" Fraction="{Binding Progress.Fraction}"/>
+       </StackPanel>
+      </Grid>
+     </HierarchicalDataTemplate></TreeView.ItemTemplate>
+    </TreeView>
    </DockPanel></Border>
    <Grid Grid.Column="2" x:Name="PracticeLayout"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <StackPanel Margin="0,0,0,8"><TextBlock x:Name="CourseTitle" Text="载入课程…" FontSize="21" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text,RelativeSource={RelativeSource Self}}"/><TextBlock x:Name="CourseSubtitle" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,3,0,0"/></StackPanel>

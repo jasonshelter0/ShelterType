@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TypeEasy.Core/TypeEasy.Core.csproj" />
+    <Compile Include="../../src/TypeEasy.Windows/KeyboardStatistics.cs" Link="KeyboardStatistics.cs" />
+  </ItemGroup>
+</Project>

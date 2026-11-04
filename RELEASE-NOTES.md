@@ -1,35 +1,34 @@
-# ShelterType 0.7.0
+# ShelterType 0.8.0
 
-ShelterType 首个 GitHub 正式版本。原生 Windows 打字练习，保留熟悉的课程体验，支持离线使用。
+新增根据本人错误生成的专属练习，课程列表用圆环显示进度。顶栏常用操作换为常规图标，错键统计突出原文语境与具体误按的对应关系。
 
-## 下载
+- 空环表示未完成；进行中的课程显示小进度圆环与百分比；完成后保留完整圆环，中央显示对号。悬停可查看状态和已完成字符数。
+- 进度按课程内的当前位置计算，包括长课当前段落中的输入；输入、完成和重新开始后即时刷新。
+- 沿用既有练习存档，只查看列表不会改写课程记录。仅打开课程不会标记为进行中。
+- 设置齿轮、测速秒表、统计柱图、侧栏和专注模式使用轻量矢量图标。保留简体中文、English、Français 的悬停说明与可访问性名称。
 
-下载 **ShelterType-win-x64.zip**，完整解压到可写目录，双击 **ShelterType.exe**。适用于 Windows 10/11 x64，自带 .NET Windows Desktop 运行环境，无需安装器或管理员权限。
+- 错键分析默认展示原文前后文中的具体混淆。点击每条记录，键盘同时标出应按键和误按键；点键可筛选相关记录。
+- 原文语境与按误键汇总分别查看，避免重复计数。输入法提交字符以文字呈现，不推断实际物理按键。
+- 新增“专属练习”：从个人错键与原文语境生成短课，区分五笔86/98、拼音、英文、数字键盘和中文输入。练到一半可继续，完成后按最新记录生成下一组；没有错误记录时不会编造练习。
 
-## 本版内容
+## 更新
 
-- 正式更名 ShelterType，增加项目入口与授权资料致谢。
-- 完整 721 门课程，包含五笔 86/98、英文、中文、拼音及入门指法。
-- 每课续练、方形键帽与分指配色、指法演示和专注模式。
-- 深浅主题，中英法界面。
-- 打字测速、个人趋势、每日练习热力图、文章速度热力图和键盘错键分析。
-- 自动检测 GitHub 正式更新，可在设置中关闭或手动检查；发现新版本后提醒，点击下载并更新即可完成校验、保存进度、更新和重启。
-- 更新失败回滚；保留 UserData 和包外的本地文件。
+0.7.0 用户可在“设置 → 检查更新”下载并更新，个人进度自动保留。新版顶栏的设置入口是右上角齿轮。
 
-## 从旧测试版迁移
+首次使用：下载 **ShelterType-win-x64.zip**，完整解压到可写目录，运行 **ShelterType.exe**。适用于 Windows 10/11 x64，内含运行环境和完整 721 门课程。
 
-关闭旧程序，将旧版程序旁的 **UserData** 整个文件夹复制到新 **ShelterType.exe** 旁边。课程编号和内容保持一致，可以继续既有进度。自动更新从本版起提供；首次从旧测试版迁移需要解压新版。
-
-## 验证与说明
-
-核心、课程和统计 1305 项断言通过；更新器 120 项检查和独立安装/回滚复核通过；中英法更新界面和最终包安装重启已验证。发布包不包含个人记录。
-
-本版提供自包含便携包，更新需要该目录有写入权限。SHA-256 文件用于下载完整性校验；当前程序未进行 Authenticode 代码签名。源码及课程资料的授权说明见 README、ACKNOWLEDGEMENTS.md 和 THIRD-PARTY-NOTICES.md。
-
-感谢金山打字通 2008 原作者及课程、词库、教学资料贡献者。原版资料经项目维护者确认取得授权后随本版提供，版权归原权利人所有。ShelterType 是独立项目，并非金山官方产品。
+新增只读进度检查覆盖存档恢复、完成、重置、错键、回退和课程变化；课程和统计回归通过。感谢金山打字通 2008 原作者与资料贡献者，授权与致谢见 ACKNOWLEDGEMENTS.md。
 
 ## English
 
-First public ShelterType release: a native Windows typing tutor with 721 lessons, resumable practice, Wubi 86/98, finger guidance, speed tests, local statistics, and a Chinese/English/French interface.
+The lesson list now shows completion marks and live progress percentages. Settings, speed tests, statistics, the sidebar and focus mode use lightweight vector icons with translated tooltips and accessible names. Error analysis focuses on original text contexts and expected-to-mistyped pairs. Select any error row to highlight both keys. Existing progress and all 721 lessons are preserved.
 
-Extract the complete **ShelterType-win-x64.zip** and run **ShelterType.exe**. The Windows 10/11 x64 portable package includes .NET. Updates are checked automatically and installed only after you choose to download and update. Practice data stays in **UserData**. To migrate from the earlier TypeEasy Next preview, close it and copy its UserData folder beside the new executable.
+Personal practice creates short confusion and context exercises from your own mistakes. Unfinished sets remain resumable; completed sets can be followed by a new set based on updated records.
+
+Version 0.7.0 can update from **Settings → Check for updates**. On 0.8.0, Settings is the gear icon at the top right.
+
+## Français
+
+La liste des cours affiche désormais leur état et leur progression en direct. Les commandes principales utilisent des icônes classiques avec des infobulles traduites. La progression existante et les 721 cours sont conservés. Pour mettre à jour la version 0.7.0, ouvrez les réglages puis recherchez une mise à jour.
+
+Les exercices ciblés sont créés à partir de vos propres erreurs et de leur contexte. Une série inachevée reste disponible ; une fois terminée, la suivante tient compte des données actualisées.

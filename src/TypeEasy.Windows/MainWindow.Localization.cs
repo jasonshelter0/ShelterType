@@ -1,4 +1,5 @@
 using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Text.RegularExpressions;
 
 namespace TypeEasy.Windows;
@@ -11,10 +12,11 @@ public partial class MainWindow
         prefs.Language = UiText.Language;
         Title = "ShelterType";
         BrandLabel.Text = "ShelterType";
-        SidebarButton.ToolTip = UiText.T("课程目录", "Course list", "Liste des cours");
-        SpeedButton.Content = UiText.T("测速", "Speed test", "Test de vitesse");
-        StatisticsButton.Content = UiText.T("统计", "Statistics", "Statistiques");
-        SettingsButton.Content = UiText.T("设置", "Settings", "Réglages");
+        SetButtonLabel(SpeedButton, UiText.T("测速", "Speed test", "Test de vitesse"));
+        SetButtonLabel(StatisticsButton, UiText.T("统计", "Statistics", "Statistiques"));
+        SetButtonLabel(SettingsButton, UiText.T("设置", "Settings", "Réglages"));
+        PersonalPracticeButton.Content = UiText.T("专属练习", "Personal practice", "Exercices ciblés");
+        AutomationProperties.SetName(PersonalPracticeButton, PersonalPracticeButton.Content.ToString());
         RefreshUpdateNotice();
         WubiTab.Content = UiText.Mode("五笔");
         EnglishTab.Content = UiText.Mode("英文");
@@ -36,6 +38,12 @@ public partial class MainWindow
             Render();
         }
         ApplyLayout();
+    }
+
+    private static void SetButtonLabel(Button button, string label)
+    {
+        button.ToolTip = label;
+        AutomationProperties.SetName(button, label);
     }
 
     private void UpdateCourseLabels()

@@ -24,6 +24,7 @@ public sealed class TeachingKeyboard : UserControl
     public bool IsDemonstrating => _demoTimer.IsEnabled;
     private IReadOnlyDictionary<string,KeyboardHeatValue>? _statistics;
     private string? _selectedStatKey;
+    private KeyboardErrorPath? _errorPath;
     public event Action<string>? KeySelected;
     public void SetStatistics(IReadOnlyDictionary<string,KeyboardHeatValue>? values,bool numericPad=false,string? selectedKey=null)
     {
@@ -31,6 +32,16 @@ public sealed class TeachingKeyboard : UserControl
         IsHitTestVisible=values is not null; Cursor=values is null?Cursors.Arrow:Cursors.Hand;
         UpdateDesiredHeight(); InvalidateVisual();
     }
+    public void SetErrorPath(KeyboardErrorPath? path)
+    {
+        _errorPath = path;
+        AutomationProperties.SetName(this, path is null ? UiText.T("统计键盘", "Statistics keyboard", "Clavier statistique")
+            : UiText.Format("应按 {0}，误按 {1}", "Expected {0}, entered {1}", "Attendu : {0}, saisi : {1}", UiText.Key(path.Expected), UiText.Key(path.Actual)));
+        InvalidateVisual();
+    }
+    public static Color ErrorPathColor(bool expected, bool dark) => expected
+        ? dark ? Color.FromRgb(68,213,178) : Color.FromRgb(0,115,87)
+        : dark ? Color.FromRgb(255,149,123) : Color.FromRgb(183,53,35);
 
     private static readonly Dictionary<TypingFinger, Color> FingerColors = new()
     {
@@ -92,6 +103,7 @@ public sealed class TeachingKeyboard : UserControl
 
     public void SetTarget(char? expected, bool numericPad = false)
     {
+        _errorPath = null;
         var changedMode = numericPad != _numericPad;
         _target = expected;
         _numericPad = numericPad;
@@ -230,10 +242,30 @@ public sealed class TeachingKeyboard : UserControl
         var rect=new Rect(key.X,key.Y,key.Width-3,key.Height-3);
         var color=StatisticsColor(FieldColor,value);
         var selected=key.Id==_selectedStatKey;
+        var expected = key.Id == _errorPath?.ExpectedPhysicalKey;
+        var actual = key.Id == _errorPath?.ActualPhysicalKey;
+        var dark = FieldColor.R + FieldColor.G + FieldColor.B < 384;
+        var expectedBrush = new SolidColorBrush(ErrorPathColor(true,dark));
+        var actualBrush = new SolidColorBrush(ErrorPathColor(false,dark));
+        if(expected || actual) color=Mix(FieldColor,ErrorPathColor(expected,dark),.25);
         dc.DrawRoundedRectangle(new SolidColorBrush(color),new Pen(ResourceBrush(selected?"Accent":"Line","#304044"),selected?2.5:0.8),rect,4,4);
+        if(expected) dc.DrawRoundedRectangle(null,new Pen(expectedBrush,2.8),rect,4,4);
+        if(actual)
+        {
+            var outline=rect;
+            if(expected)outline.Inflate(-4,-4);
+            dc.DrawRoundedRectangle(null,new Pen(actualBrush,2.3){DashStyle=DashStyles.Dash},outline,3,3);
+        }
         var label=FormatText(KeyLabel(key),key.Width<60?11:12,ContrastingInk(color));
         dc.DrawText(label,new Point(rect.Left+(rect.Width-label.Width)/2,rect.Top+(rect.Height-label.Height)/2));
         if(selected)dc.DrawLine(new Pen(ContrastingInk(color),2),new Point(rect.Left+7,rect.Bottom-4),new Point(rect.Right-7,rect.Bottom-4));
+        if(expected)dc.DrawEllipse(expectedBrush,null,new Point(rect.Left+7,rect.Top+7),2.3,2.3);
+        if(actual)
+        {
+            var mark=new Pen(actualBrush,2){StartLineCap=PenLineCap.Round,EndLineCap=PenLineCap.Round};
+            dc.DrawLine(mark,new Point(rect.Right-10,rect.Top+4),new Point(rect.Right-4,rect.Top+10));
+            dc.DrawLine(mark,new Point(rect.Right-10,rect.Top+10),new Point(rect.Right-4,rect.Top+4));
+        }
     }
     public static Color StatisticsColor(Color background,KeyboardHeatValue? value)
     {

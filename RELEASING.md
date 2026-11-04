@@ -2,7 +2,7 @@
 
 ## 发布约定
 
-当前官方渠道是 `jasonshelter0/ShelterType` 的正式 GitHub Release。版本号从 `src/TypeEasy.Windows/TypeEasy.Windows.csproj` 的 `Version` 读取，使用 `Major.Minor.Patch`；标签使用 `v` 前缀，例如 `v0.7.0`。不要用同一版本标签发布不同的程序。
+当前官方渠道是 `jasonshelter0/ShelterType` 的正式 GitHub Release。版本号从 `src/TypeEasy.Windows/TypeEasy.Windows.csproj` 的 `Version` 读取，使用 `Major.Minor.Patch`；标签使用 `v` 前缀，例如 `v0.8.0`。不要用同一版本标签发布不同的程序。
 
 发布包为 self-contained Windows x64 便携 ZIP。用户无需额外安装 .NET；源码中没有浏览器运行时或第三方更新框架。
 
@@ -21,16 +21,16 @@ GitHub Actions 的 Windows workflow 只构建和保存检查用 artifact，没�
 下列命令由已经登录 GitHub CLI、具有仓库写入权限的维护者执行。先推送对应提交和标签，然后创建草稿并上传两个资产：
 
 ```powershell
-git tag v0.7.0
+git tag v0.8.0
 git push origin main
-git push origin v0.7.0
-gh release create v0.7.0 ./artifacts/releases/0.7.0/ShelterType-win-x64.zip ./artifacts/releases/0.7.0/ShelterType-win-x64.zip.sha256 --repo jasonshelter0/ShelterType --verify-tag --draft --title 'ShelterType 0.7.0' --notes-file RELEASE-NOTES.md
+git push origin v0.8.0
+gh release create v0.8.0 ./artifacts/releases/0.8.0/ShelterType-win-x64.zip ./artifacts/releases/0.8.0/ShelterType-win-x64.zip.sha256 --repo jasonshelter0/ShelterType --verify-tag --draft --title 'ShelterType 0.8.0' --notes-file RELEASE-NOTES.md
 ```
 
 确认附件完整、版本和说明正确后：
 
 ```powershell
-gh release edit v0.7.0 --repo jasonshelter0/ShelterType --draft=false --latest
+gh release edit v0.8.0 --repo jasonshelter0/ShelterType --draft=false --latest
 ```
 
 GitHub 自动为标签提供源码 ZIP/TAR.GZ。程序检查 `releases/latest`，忽略草稿和预发布版本；发布正式版后，旧版本才会提示更新。不要在公开发布时将测试用的较高假版本标记为 latest。
