@@ -1,0 +1,101 @@
+
+unit pcStack;
+
+interface
+
+uses Classes, SysUtils;
+
+type
+  EpcStackError = class(exception)
+  end;
+
+type
+  TpcStack = class
+  private
+    FList : PPointerList;
+    FCount : Integer;
+    FCapacity : Integer;
+    function Get(index : integer) : pointer;
+    procedure Put(index : integer; value : pointer);
+    procedure Grow;
+    procedure SetCapacity(NewCapacity : Integer);
+  public
+    destructor Destroy; override;
+    procedure Clear;
+    procedure Push(value : pointer);
+    function Pop : pointer;
+    function Empty : boolean;
+    property Capacity : integer read FCapacity write SetCapacity;
+    property Items[Index : Integer] : Pointer read Get write Put; default;
+    property Count : integer read FCount;
+  end;
+
+implementation
+
+function TpcStack.Empty : boolean;
+begin
+  result := Count = 0;
+end;
+
+function TpcStack.Get(index : integer) : pointer;
+begin
+  result := FList^[index];
+end;
+
+procedure TpcStack.Put(index : integer; value : pointer);
+begin
+  FList^[index] := value;
+end;
+
+destructor TpcStack.Destroy;
+begin
+  FreeMem(FList, FCapacity);
+  inherited Destroy;
+end;
+
+procedure TpcStack.Grow;
+var
+  Delta : Integer;
+begin
+  if FCapacity > 64 then
+    Delta := FCapacity div 4
+  else if FCapacity > 8 then
+    Delta := 16
+  else
+    Delta := 4;
+  SetCapacity(FCapacity + Delta);
+end;
+
+procedure TpcStack.SetCapacity(NewCapacity : Integer);
+begin
+  if (NewCapacity < FCount) or (NewCapacity > MaxListSize) then
+    raise EpcStackError.Create('Invalid pcStack capacity.');
+  if NewCapacity <> FCapacity then
+  begin
+    ReallocMem(FList, NewCapacity * SizeOf(Pointer));
+    FCapacity := NewCapacity;
+  end;
+end;
+
+procedure TpcStack.Push;
+begin
+  if FCount = FCapacity then Grow;
+  FList^[FCount] := value;
+  Inc(FCount);
+end;
+
+function TpcStack.Pop;
+begin
+  if FCount = 0 then raise EpcStackError.Create('pcStack is empty.');
+  result := FList^[FCount - 1];
+  dec(FCount);
+  if FCount < (FCapacity div 2) then SetCapacity(FCapacity div 2);
+end;
+
+procedure TpcStack.Clear;
+begin
+  FCount := 0;
+  SetCapacity(0);
+end;
+
+end.

@@ -1,0 +1,373 @@
+unit pcList;
+
+interface
+
+uses ElContBase;
+
+type
+  TpcListSortCompare = function(Item1, Item2: Pointer; Cargo: Pointer): Integer;
+
+  TpcListDeleteEvent = procedure(Sender: TObject; Item: Pointer) of object;
+
+  TpcList = class
+  protected
+    FList: PPointerList;
+    FCount: Integer;
+    FCapacity: Integer;
+    FAutoClearObjects: Boolean;
+    FOnDelete: TpcListDeleteEvent;
+    function Get(Index: Integer): Pointer; virtual;
+    procedure Grow; virtual;
+    procedure Put(Index: Integer; Item: Pointer); virtual;
+    procedure SetCapacity(NewCapacity: Integer);
+    procedure SetCount(NewCount: Integer);
+    procedure TriggerDeleteEvent(Item: Pointer); virtual;
+    class procedure Error(const Msg: string; Data: Integer);
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Add(Item: Pointer): Integer;
+    procedure Clear; virtual;
+    procedure Assign(AList: TpcList);
+    procedure Delete(Index: Integer); virtual;
+    procedure Exchange(Index1, Index2: Integer);
+    function Expand: TpcList;
+    function First: Pointer;
+    function IndexOf(Item: Pointer): Integer;
+    function IndexOfFrom(StartIndex: integer; Item: Pointer): Integer;
+    function IndexOfBack(StartIndex: integer; Item: Pointer): Integer;
+    procedure Insert(Index: Integer; Item: Pointer);
+    function Last: Pointer;
+    procedure Move(CurIndex, NewIndex: Integer);
+    procedure MoveRange(CurStart, CurEnd, NewStart: integer);
+    function Remove(Item: Pointer): Integer;
+    procedure Pack;
+    procedure Sort(Compare: TpcListSortCompare; Cargo: Pointer);
+    property Capacity: Integer read FCapacity write SetCapacity;
+    property Count: Integer read FCount write SetCount;
+    property Items[Index: Integer]: Pointer read Get write Put; default;
+    property List: PPointerList read FList;
+    property AutoClearObjects: Boolean read FAutoClearObjects write FAutoClearObjects; { Published }
+    property OnDelete: TpcListDeleteEvent read FOnDelete write FOnDelete;
+  end;
+
+implementation
+
+uses SysUtils;
+
+type
+  EpcListError = class(Exception);
+//T & R
+resourcestring
+  rs_ListIndexOutOfBounds = 'List index [%d] out of bounds...';
+
+procedure RaiseOutOfBoundsError(Ind: integer);
+begin
+  raise EpcListError.CreateFmt(rs_ListIndexOutOfBounds, [Ind]);
+// raise EListError.Create('List index out of bounds.');
+end;
+
+class procedure TpcList.Error(const Msg: string; Data: Integer);
+
+  function ReturnAddr: Pointer;
+  asm
+    MOV     EAX,[EBP+4]
+  end;
+
+begin
+  raise EpcListError.CreateFmt(Msg, [Data])at ReturnAddr;
+end;
+
+constructor TpcList.Create;
+begin
+  inherited;
+  FList := nil;
+  FCount := 0;
+  FCapacity := 0;
+  FAutoClearObjects := FALSE;
+  FOnDelete := nil;
+end;
+
+destructor TpcList.Destroy;
+begin
+  Clear;
+  inherited;
+end;
+
+function TpcList.Add(Item: Pointer): Integer;
+begin
+  Result := FCount;
+  if Result = FCapacity then Grow;
+  FList^[Result] := Item;
+  Inc(FCount);
+end;
+
+procedure TpcList.Assign(AList: TpcList);
+begin
+  Clear;
+  SetCapacity(AList.Capacity);
+  SetCount(AList.Count);
+  System.Move(AList.FList^[0], FList^[0], FCount * sizeof(pointer));
+end;
+
+procedure TpcList.Clear;
+var
+  I: integer;
+  p: pointer;
+begin
+  if Assigned(FOnDelete) then
+    for i := 0 to Count - 1 do
+      TriggerDeleteEvent(Get(i));
+  if AutoClearObjects then
+    for i := 0 to Count - 1 do
+    begin
+      p := Get(i);
+      try
+        if (P <> nil) and (TObject(P) is TObject) then TObject(P).Free;
+      except
+      end;
+    end;
+  SetCount(0);
+  SetCapacity(0);
+end;
+
+procedure TpcList.Delete(Index: Integer);
+begin
+  if (Index < 0) or (Index >= FCount) then RaiseOutOfBoundsError(Index);
+  TriggerDeleteEvent(Get(Index));
+  Dec(FCount);
+  if Index < FCount then
+    System.Move(FList^[Index + 1], FList^[Index],
+      (FCount - Index) * SizeOf(Pointer));
+  if FCount < (FCapacity div 2) then SetCapacity(FCapacity div 2);
+end;
+
+procedure TpcList.Exchange(Index1, Index2: Integer);
+var
+  Item: Pointer;
+begin
+  if (Index1 < 0) or (Index1 >= FCount) then RaiseOutOfBoundsError(Index1);
+  if (Index2 < 0) or (Index2 >= FCount) then RaiseOutOfBoundsError(Index2);
+  Item := FList^[Index1];
+  FList^[Index1] := FList^[Index2];
+  FList^[Index2] := Item;
+end;
+
+function TpcList.Expand: TpcList;
+begin
+  if FCount = FCapacity then Grow;
+  Result := Self;
+end;
+
+function TpcList.First: Pointer;
+begin
+  Result := Get(0);
+end;
+
+function TpcList.Get(Index: Integer): Pointer;
+begin
+  if (Index < 0) or (Index >= FCount) then RaiseOutOfBoundsError(Index);
+  Result := FList^[Index];
+end;
+
+procedure TpcList.Grow;
+var
+  Delta: Integer;
+begin
+  if FCapacity > 64 then
+    Delta := FCapacity div 4
+  else if FCapacity > 8 then
+    Delta := 16
+  else
+    Delta := 4;
+  SetCapacity(FCapacity + Delta);
+end;
+
+function TpcList.IndexOfFrom(StartIndex: integer; Item: Pointer): Integer;
+begin
+  if (StartIndex < 0) or (StartIndex >= FCount) then RaiseOutOfBoundsError(StartIndex);
+  Result := StartIndex;
+  while (Result < FCount) and (FList^[Result] <> Item) do Inc(Result);
+  if Result = FCount then Result := -1;
+end;
+
+function TpcList.IndexOfBack(StartIndex: integer; Item: Pointer): Integer;
+begin
+  if (StartIndex < 0) or (StartIndex >= FCount) then RaiseOutOfBoundsError(StartIndex);
+  Result := StartIndex;
+  while (Result >= 0) and (FList^[Result] <> Item) do dec(Result);
+end;
+
+function TpcList.IndexOf(Item: Pointer): Integer;
+begin
+  Result := 0;
+  while (Result < FCount) and (FList^[Result] <> Item) do
+    Inc(Result);
+  if Result = FCount then Result := -1;
+end;
+
+procedure TpcList.Insert(Index: Integer; Item: Pointer);
+begin
+  if (Index < 0) or (Index > FCount) then RaiseOutOfBoundsError(Index);
+  if FCount = FCapacity then Grow;
+  if Index < FCount then
+    System.Move(FList^[Index], FList^[Index + 1],
+      (FCount - Index) * SizeOf(Pointer));
+  FList^[Index] := Item;
+  Inc(FCount);
+end;
+
+function TpcList.Last: Pointer;
+begin
+  Result := Get(FCount - 1);
+end;
+
+procedure TpcList.MoveRange(CurStart, CurEnd, NewStart: integer);
+var
+  bs: integer;
+  P: PChar;
+begin
+  if CurStart <> NewStart then
+  begin
+    if (NewStart < 0) or (NewStart >= FCount) or
+      ((NewStart >= CurStart) and (NewStart <= CurEnd)) then RaiseOutOfBoundsError(NewStart);
+    if (CurStart < 0) or (CurStart >= FCount) then RaiseOutOfBoundsError(CurStart);
+    if (CurEnd < 0) or (CurEnd >= FCount) then RaiseOutOfBoundsError(CurEnd);
+    if CurStart > NewStart then
+    begin
+      bs := CurEnd - CurStart + 1;
+      GetMem(P, bs * SizeOf(Pointer));
+      System.Move(FList^[CurStart], P^, BS * SizeOf(Pointer));
+      System.Move(FList^[NewStart], FList^[NewStart + BS], (CurStart - NewStart) * SizeOf(Pointer));
+      System.Move(P^, FList^[NewStart], BS * SizeOf(Pointer));
+      FreeMem(P);
+    end else
+    begin
+      bs := CurEnd - CurStart + 1;
+      GetMem(P, BS * SizeOf(Pointer));
+      System.Move(FList^[CurStart], P^, BS * SizeOf(Pointer));
+      System.Move(FList^[CurEnd + 1], FList^[CurStart], (NewStart - CurEnd) * SizeOf(Pointer));
+      NewStart := CurStart - 1 + NewStart - CurEnd;
+      System.Move(P^, FList^[NewStart], BS * SizeOf(Pointer));
+      FreeMem(P);
+    end;
+  end;
+end;
+
+
+procedure TpcList.Move(CurIndex, NewIndex: Integer);
+var
+  Item: Pointer;
+begin
+  if CurIndex <> NewIndex then
+  begin
+    if (NewIndex < 0) or (NewIndex >= FCount) then RaiseOutOfBoundsError(NewIndex);
+    Item := Get(CurIndex);
+    Delete(CurIndex);
+    Insert(NewIndex, Item);
+  end;
+end;
+
+procedure TpcList.Put(Index: Integer; Item: Pointer);
+begin
+  if (Index < 0) or (Index >= FCount) then RaiseOutOfBoundsError(Index);
+  if FList[Index] <> nil then TriggerDeleteEvent(FList^[Index]);
+  FList^[Index] := Item;
+end;
+
+function TpcList.Remove(Item: Pointer): Integer;
+begin
+  Result := IndexOf(Item);
+  if Result <> -1 then Delete(Result);
+end;
+
+procedure TpcList.Pack;
+var
+  I: Integer;
+begin
+  for I := FCount - 1 downto 0 do
+    if Items[I] = nil then Delete(I);
+end;
+
+procedure TpcList.SetCapacity(NewCapacity: Integer);
+begin
+  if (NewCapacity < FCount) or (NewCapacity > MaxListSize) then
+    RaiseOutOfBoundsError(NewCapacity);
+  if NewCapacity <> FCapacity then
+  begin
+    ReallocMem(FList, NewCapacity * SizeOf(Pointer));
+    FCapacity := NewCapacity;
+  end;
+end;
+
+procedure TpcList.SetCount(NewCount: Integer);
+begin
+  if (NewCount < 0) or (NewCount > MaxListSize) then
+    RaiseOutOfBoundsError(NewCount);
+  if NewCount > FCapacity then SetCapacity(NewCount);
+  if NewCount > FCount then
+    FillChar(FList^[FCount], (NewCount - FCount) * SizeOf(Pointer), 0);
+  FCount := NewCount;
+end;
+
+procedure QuickSort(SortList: PPointerList; L, R: Integer;
+  SCompare: TpcListSortCompare; Cargo: Pointer);
+var
+  I, J, rI, rJ: Integer;
+  P, T: Pointer;
+begin
+  repeat
+    I := L;
+    J := R;
+    P := SortList^[(L + R) shr 1];
+
+    repeat
+      rI := SCompare(SortList^[I], P, Cargo);
+      rJ := SCompare(SortList^[J], P, Cargo);
+
+      while rI < 0 do
+      begin
+        Inc(I);
+        rI := SCompare(SortList^[I], P, Cargo);
+      end;
+
+      while rJ > 0 do
+      begin
+        Dec(J);
+        rJ := SCompare(SortList^[J], P, Cargo);
+      end;
+
+      if I <= J then
+      begin
+        if (I <> J) and ((rI <> 0) or (rJ <> 0)) then
+        begin
+          T := SortList^[I];
+          SortList^[I] := SortList^[J];
+          SortList^[J] := T;
+        end;
+
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+
+    if L < J then QuickSort(SortList, L, J, SCompare, Cargo);
+
+    L := I;
+  until I >= R;
+end;
+
+procedure TpcList.Sort(Compare: TpcListSortCompare; Cargo: Pointer);
+begin
+  if (FList <> nil) and (Count > 0) then
+    QuickSort(FList, 0, Count - 1, Compare, Cargo);
+end;
+
+procedure TpcList.TriggerDeleteEvent(Item: Pointer);
+{ Triggers the OnDelete event. This is a virtual method (descendants of this component can override it). }
+begin
+  if (assigned(FOnDelete)) then
+    FOnDelete(Self, Item);
+end; { TriggerDeleteEvent }
+
+end.

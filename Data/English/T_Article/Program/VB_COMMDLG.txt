@@ -1,0 +1,284 @@
+Public Sub Action(mAction As Integer)
+
+    Dim OFN As OPENFILENAME
+    Dim CC As CHOOSECOLOR
+    Dim CF As ChooseFont
+    Dim LF As LOGFONT
+    Dim PD As PrintDlg
+    Dim DM As DEVMODE
+    Dim DN As DEVNAMES
+    Dim CustomColors() As Byte
+    Dim sFile As String
+    Dim iDelim As Integer
+    Dim zTemp As String
+    Dim Temp As Variant
+    Dim i As Integer
+    Dim TempByteArray() As Byte
+    Dim ByteArrayLimit As Long
+    Dim OldhDC As Long
+    Dim FontToUse As Long
+    Dim tbuf As String * 80
+    Dim x As Long
+    Dim lpDevMode As Long, lpDevName As Long
+    Dim objPrinter As Printer, NewPrinterName As String
+    Dim strSetting As String
+
+    Select Case mAction
+        Case ShowOpen, ShowSave, ShowHelp
+            With OFN
+                .lStructSize = Len(OFN)
+                If mhOwner = 0 Then
+                    mhOwner = GetActiveWindow()
+                End If
+                .hwndOwner = mhOwner
+                .flags = mFlags
+                
+                .lpstrDefExt = mDefaultExt
+                
+                ' set the initial directory, otherwise uses current
+                Temp = mInitDir
+                .lpstrInitialDir = Temp
+                
+                ' retrieve the default file name
+                ' first check for wild cards
+                Temp = mFileName
+                
+                .lpstrFile = Temp & String$(255 - Len(Temp), 0)
+                .nMaxFile = 255
+                
+                .lpstrFileTitle = String$(255, 0)
+                .nMaxFileTitle = 255
+                
+                ' file type filter
+                ' we need to replace pipes with nulls
+                zTemp = mFilter
+                For i = 1 To Len(zTemp)
+                    If Mid(zTemp, i, 1) = "|" Then
+                        Mid(zTemp, i, 1) = vbNullChar
+                    End If
+                Next
+                zTemp = zTemp & String$(2, 0)
+                .lpstrFilter = zTemp
+                .nFilterIndex = mFilterIndex
+                
+                .lpstrTitle = mDialogTitle
+                
+                .hInstance = App.hInstance
+                
+                Select Case mAction
+                    Case ShowOpen, ShowColor
+                        ' open file
+                        RetValue = GetOpenFileName(OFN)
+                    Case ShowSave
+                        'save file
+                        RetValue = GetSaveFileName(OFN)
+                    Case ShowHelp
+                        ' winhelp
+                        RetValue = WinHelp(mhOwner, mHelpFile, mHelpCommand, mHelpKey)
+                End Select
+                
+                If RetValue > 0 Then
+                    iDelim = InStr(.lpstrFileTitle, vbNullChar)
+                    If iDelim > 0 Then
+                        mFileTitle = Left$(.lpstrFileTitle, iDelim - 1)
+                    End If
+                    iDelim = InStr(.lpstrFile, vbNullChar)
+                    If iDelim > 0 Then
+                        mFileName = Left$(.lpstrFile, iDelim - 1)
+                    End If
+                Else
+                    Err.Raise 0
+                End If
+            End With
+        Case ShowColor
+            ReDim CustomColors(0 To 16 * 4 - 1) As Byte
+            For i = LBound(CustomColors) To UBound(CustomColors)
+                CustomColors(i) = 255 ' white
+            Next i
+            With CC
+                .lStructSize = Len(CC)
+                If mhOwner = 0 Then
+                    mhOwner = GetActiveWindow()
+                End If
+                .hwndOwner = mhOwner
+                .hInstance = App.hInstance
+                .lpCustColors = StrConv(CustomColors, vbUnicode)
+                .flags = mFlags
+                .RGBResult = mRGBResult
+                RetValue = ChooseColorAPI(CC)
+                If RetValue = 0 Then
+                    Err.Raise (RetValue)
+                Else
+                    CustomColors = StrConv(.lpCustColors, vbFromUnicode)
+                    mRGBResult = .RGBResult
+                End If
+            End With
+        Case ShowFont
+            With LF
+                TempByteArray = StrConv(mFontName & vbNullChar, vbFromUnicode)
+                ByteArrayLimit = UBound(TempByteArray)
+                For x = 0 To ByteArrayLimit
+                    .lfFaceName(x) = TempByteArray(x)
+                Next
+                .lfHeight = mFontSize * 1.3
+                .lfItalic = mItalic * -1
+                .lfUnderline = mUnderline * -1
+                .lfStrikeOut = mStrikethru * -1
+                If mBold = True Then
+                    .lfWeight = FW_BOLD
+                End If
+            End With
+            With CF
+                .lStructSize = Len(CF)
+                If mhOwner = 0 Then
+                    mhOwner = GetActiveWindow()
+                End If
+                .hwndOwner = mhOwner
+                .hDC = GetDC(mhOwner)
+                .lpLogFont = lstrcpy(LF, LF)
+                If Not mFlags Then
+                    .flags = cdlCFScreenFonts Or cdlCFEffects
+                Else
+                    .flags = cdlCFWYSIWYG Or cdlCFEffects
+                End If
+                .flags = .flags Or CF_INITTOLOGFONTSTRUCT
+                .rgbColors = mRGBResult
+                .lCustData = 0
+                .lpfnHook = 0
+                .lpTemplateName = 0
+                .hInstance = 0
+                .lpszStyle = 0
+                .nFontType = SCREEN_FONTTYPE
+                .nSizeMin = 0
+                .nSizeMax = 0
+                .iPointSize = mFontSize * 10
+            End With
+            
+            RetValue = ChooseFont(CF)
+            If RetValue = 0 Then
+                Err.Raise (RetValue)
+            Else
+                With LF
+                    mItalic = .lfItalic * -1
+                    mUnderline = .lfUnderline * -1
+                    mStrikethru = .lfStrikeOut * -1
+                End With
+                With CF
+                    mFontSize = .iPointSize \ 10
+                    mRGBResult = .rgbColors
+                    If .nFontType And BOLD_FONTTYPE Then
+                        mBold = True
+                    Else
+                        mBold = False
+                    End If
+                End With
+                FontToUse = CreateFontIndirect(LF)
+                If FontToUse = 0 Then Exit Sub
+                OldhDC = SelectObject(CF.hDC, FontToUse)
+                RetValue = GetTextFace(CF.hDC, 79, tbuf)
+                mFontName = Mid$(tbuf, 1, RetValue)
+            End If
+        Case ShowPrinter
+            ' Use PrintDialog to get the handle to a memory
+            ' block with a DevMode and DevName structures
+            With PD
+                .lStructSize = Len(PD)
+                If mhOwner = 0 Then
+                    mhOwner = GetActiveWindow()
+                End If
+                .hwndOwner = mhOwner
+                .hDC = GetDC(mhOwner)
+                .flags = mFlags
+            End With
+            
+            ' Set the current orientation and duplex setting
+            On Error GoTo ErrorHandler
+            With DM
+                .dmDeviceName = Printer.DeviceName
+                .dmSize = Len(DM)
+                .dmFields = DM_ORIENTATION Or DM_DUPLEX
+                .dmOrientation = Printer.Orientation
+                On Error Resume Next
+                .dmDuplex = Printer.Duplex
+                On Error GoTo 0
+            End With
+            
+            ' Allocate memory for the initialization hDevMode structure
+            ' and copy the settings gathered above into this memory
+            PD.hDevMode = GlobalAlloc(GMEM_MOVEABLE Or GMEM_ZEROINIT, Len(DM))
+            lpDevMode = GlobalLock(PD.hDevMode)
+            If lpDevMode > 0 Then
+                CopyMemory ByVal lpDevMode, DM, Len(DM)
+                RetValue = GlobalUnlock(lpDevMode)
+            End If
+
+            ' Set the current driver, device, and port name strings
+            With DN
+                .wDriverOffset = 8
+                .wDeviceOffset = .wDriverOffset + 1 + Len(Printer.DriverName)
+                .wOutputOffset = .wDeviceOffset + 1 + Len(Printer.Port)
+                .wDefault = 0
+            End With
+            With Printer
+                DN.extra = .DriverName & vbNullChar & .DeviceName & vbNullChar & .Port & vbNullChar
+            End With
+            
+            ' Allocate memory for the initial hDevName structure
+            ' and copy the settings gathered above into this memory
+            PD.hDevNames = GlobalAlloc(GMEM_MOVEABLE Or GMEM_ZEROINIT, Len(DN))
+            lpDevName = GlobalLock(PD.hDevNames)
+            If lpDevName > 0 Then
+                CopyMemory ByVal lpDevName, DN, Len(DN)
+                RetValue = GlobalUnlock(lpDevName)
+            End If
+            
+            ' Call the print dialog up and let the user make changes
+            RetValue = PrintDlg(PD)
+            If RetValue = 0 Then
+                Err.Raise (RetValue)
+            Else
+                ' get the DC for user API operations
+                mhOwner = PD.hDC
+                ' get the DevName structure.
+                lpDevName = GlobalLock(PD.hDevNames)
+                CopyMemory DN, ByVal lpDevName, 45
+                RetValue = GlobalUnlock(lpDevName)
+                GlobalFree PD.hDevNames
+                
+                ' Next get the DevMode structure and set the printer
+                ' properties appropriately
+                lpDevMode = GlobalLock(PD.hDevMode)
+                CopyMemory DM, ByVal lpDevMode, Len(DM)
+                RetValue = GlobalUnlock(PD.hDevMode)
+                GlobalFree PD.hDevMode
+                NewPrinterName = UCase$(Left(DM.dmDeviceName, InStr(DM.dmDeviceName, vbNullChar) - 1))
+                If Printer.DeviceName <> NewPrinterName Then
+                    For Each objPrinter In Printers
+                       If UCase$(objPrinter.DeviceName) = NewPrinterName Then
+                            Set Printer = objPrinter
+                       End If
+                    Next
+                End If
+                On Error Resume Next
+            
+                ' Set printer object properties according to selections made
+                ' by user
+                With Printer
+                    .Copies = DM.dmCopies
+                    .Duplex = DM.dmDuplex
+                    .Orientation = DM.dmOrientation
+                End With
+                On Error GoTo 0
+            End If
+    End Select
+    
+ExitSub:
+
+    Exit Sub
+    
+ErrorHandler:
+
+    MsgBox Err.Description, vbExclamation, "Printer Error"
+    Resume ExitSub
+    
+End Sub

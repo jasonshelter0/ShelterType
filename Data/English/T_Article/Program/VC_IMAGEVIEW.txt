@@ -1,0 +1,155 @@
+// ImageViewView.cpp : implementation of the CImageViewView class
+//
+
+#include "stdafx.h"
+#include "ImageView.h"
+
+#include "ImageViewDoc.h"
+#include "ImageViewView.h"
+#include "MainFrm.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+#define HIMETRIC_INCH	2540
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView
+
+IMPLEMENT_DYNCREATE(CImageViewView, CView)
+
+BEGIN_MESSAGE_MAP(CImageViewView, CView)
+	//{{AFX_MSG_MAP(CImageViewView)
+	ON_COMMAND(ID_FILE_OPEN, OnFileOpen)
+	//}}AFX_MSG_MAP
+	// Standard printing commands
+	ON_COMMAND(ID_FILE_PRINT, CView::OnFilePrint)
+	ON_COMMAND(ID_FILE_PRINT_DIRECT, CView::OnFilePrint)
+	ON_COMMAND(ID_FILE_PRINT_PREVIEW, CView::OnFilePrintPreview)
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView construction/destruction
+
+CImageViewView::CImageViewView()
+{
+}
+
+CImageViewView::~CImageViewView()
+{
+}
+
+BOOL CImageViewView::PreCreateWindow(CREATESTRUCT& cs)
+{
+	return CView::PreCreateWindow(cs);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView drawing
+
+void CImageViewView::OnDraw(CDC* pDC)
+{
+	CImageViewDoc* pDoc = GetDocument();
+	ASSERT_VALID(pDoc);
+	
+	if (!m_PicFile.IsEmpty())
+	{
+		HANDLE hFile = CreateFile(m_PicFile, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+		_ASSERTE(INVALID_HANDLE_VALUE != hFile);
+
+		DWORD dwFileSize = GetFileSize(hFile, NULL);
+		_ASSERTE(-1 != dwFileSize);
+
+		LPVOID pvData = NULL;
+		HGLOBAL hGlobal = GlobalAlloc(GMEM_MOVEABLE, dwFileSize);
+		_ASSERTE(NULL != hGlobal);
+
+		pvData = GlobalLock(hGlobal);
+		_ASSERTE(NULL != pvData);
+
+		DWORD dwBytesRead = 0;
+		BOOL bRead = ReadFile(hFile, pvData, dwFileSize, &dwBytesRead, NULL);
+		_ASSERTE(FALSE != bRead);
+		GlobalUnlock(hGlobal);
+		CloseHandle(hFile);
+ 
+		LPSTREAM pstm = NULL;
+		HRESULT hr = CreateStreamOnHGlobal(hGlobal, TRUE, &pstm);
+		_ASSERTE(SUCCEEDED(hr) && pstm);
+ 
+		LPPICTURE gpPicture;
+ 
+		hr = ::OleLoadPicture(pstm, dwFileSize, FALSE, IID_IPicture, (LPVOID *)&gpPicture);
+		_ASSERTE(SUCCEEDED(hr) && gpPicture); 
+		pstm->Release ();
+
+		long hmWidth;
+		long hmHeight;
+		gpPicture->get_Width(&hmWidth);
+		gpPicture->get_Height(&hmHeight);
+		// convert himetric to pixels
+		int nWidth	= MulDiv(hmWidth, GetDeviceCaps(pDC->GetSafeHdc() , LOGPIXELSX), HIMETRIC_INCH);
+		int nHeight	= MulDiv(hmHeight, GetDeviceCaps(pDC->GetSafeHdc() , LOGPIXELSY), HIMETRIC_INCH);
+		RECT rc;
+		GetClientRect(&rc);
+		gpPicture->Render(pDC->GetSafeHdc(), 0, 0, nWidth, nHeight, 0, hmHeight, hmWidth, -hmHeight, &rc);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView printing
+
+BOOL CImageViewView::OnPreparePrinting(CPrintInfo* pInfo)
+{
+	// default preparation
+	return DoPreparePrinting(pInfo);
+}
+
+void CImageViewView::OnBeginPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
+{
+}
+
+void CImageViewView::OnEndPrinting(CDC* /*pDC*/, CPrintInfo* /*pInfo*/)
+{
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView diagnostics
+
+#ifdef _DEBUG
+void CImageViewView::AssertValid() const
+{
+	CView::AssertValid();
+}
+
+void CImageViewView::Dump(CDumpContext& dc) const
+{
+	CView::Dump(dc);
+}
+
+CImageViewDoc* CImageViewView::GetDocument() // non-debug version is inline
+{
+	ASSERT(m_pDocument->IsKindOf(RUNTIME_CLASS(CImageViewDoc)));
+	return (CImageViewDoc*)m_pDocument;
+}
+#endif //_DEBUG
+
+/////////////////////////////////////////////////////////////////////////////
+// CImageViewView message handlers
+
+void CImageViewView::OnFileOpen() 
+{
+	// TODO: Add your command handler code here
+	CFileDialog dlg(TRUE,"bmp",NULL,
+					OFN_HIDEREADONLY|OFN_OVERWRITEPROMPT,
+					"Bitmap Files(*.bmp)|*.bmp|All Files(*.*)|*.*||");
+	if (dlg.DoModal() == IDCANCEL)
+		return;
+
+	m_PicFile = dlg.GetPathName();
+	
+	Invalidate(FALSE);
+}

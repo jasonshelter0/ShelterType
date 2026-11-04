@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>ShelterType</AssemblyName>
+    <RootNamespace>TypeEasy.Windows</RootNamespace>
+    <Version>0.7.0</Version><Product>ShelterType</Product><Title>ShelterType</Title><ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../TypeEasy.Core/TypeEasy.Core.csproj" /><ProjectReference Include="../ShelterType.Update/ShelterType.Update.csproj" /></ItemGroup>
+</Project>

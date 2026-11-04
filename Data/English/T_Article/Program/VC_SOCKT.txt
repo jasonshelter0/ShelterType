@@ -1,0 +1,148 @@
+// SocktClientDlg.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "SocktClient.h"
+#include "SocktClientDlg.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+// CSocktClientDlg dialog
+
+CSocktClientDlg::CSocktClientDlg(CWnd* pParent /*=NULL*/)
+	: CDialog(CSocktClientDlg::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CSocktClientDlg)
+	m_strUser = _T("");
+	m_strPass = _T("");
+	//}}AFX_DATA_INIT
+	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+}
+
+void CSocktClientDlg::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CSocktClientDlg)
+	DDX_Text(pDX, IDC_EDITUSER, m_strUser);
+	DDX_Text(pDX, IDC_EDITPASS, m_strPass);
+	//}}AFX_DATA_MAP
+}
+
+BEGIN_MESSAGE_MAP(CSocktClientDlg, CDialog)
+	//{{AFX_MSG_MAP(CSocktClientDlg)
+	ON_WM_PAINT()
+	ON_WM_QUERYDRAGICON()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CSocktClientDlg message handlers
+
+BOOL CSocktClientDlg::OnInitDialog()
+{
+	CDialog::OnInitDialog();
+
+	SetIcon(m_hIcon, TRUE);			// Set big icon
+	SetIcon(m_hIcon, FALSE);		// Set small icon
+	
+	// TODO: Add extra initialization here
+	
+	return TRUE;  // return TRUE  unless you set the focus to a control
+}
+
+// If you add a minimize button to your dialog, you will need the code below
+//  to draw the icon.  For MFC applications using the document/view model,
+//  this is automatically done for you by the framework.
+
+void CSocktClientDlg::OnPaint() 
+{
+	if (IsIconic())
+	{
+		CPaintDC dc(this); // device context for painting
+
+		SendMessage(WM_ICONERASEBKGND, (WPARAM) dc.GetSafeHdc(), 0);
+
+		// Center icon in client rectangle
+		int cxIcon = GetSystemMetrics(SM_CXICON);
+		int cyIcon = GetSystemMetrics(SM_CYICON);
+		CRect rect;
+		GetClientRect(&rect);
+		int x = (rect.Width() - cxIcon + 1) / 2;
+		int y = (rect.Height() - cyIcon + 1) / 2;
+
+		// Draw the icon
+		dc.DrawIcon(x, y, m_hIcon);
+	}
+	else
+	{
+		CDialog::OnPaint();
+	}
+}
+
+HCURSOR CSocktClientDlg::OnQueryDragIcon()
+{
+	return (HCURSOR) m_hIcon;
+}
+
+void CSocktClientDlg::OnOK() 
+{
+	// TODO: Add extra validation here
+	if (m_hSocket != NULL)
+	{
+		closesocket(m_hSocket);
+		m_hSocket = NULL;
+	}
+	if(m_hSocket == NULL)
+	{
+		m_hSocket = socket(AF_INET,SOCK_STREAM,0);
+		ASSERT(m_hSocket != NULL);
+	}
+
+	UpdateData();
+	
+	m_addr.sin_family = AF_INET;
+	m_addr.sin_addr.S_un.S_addr = inet_addr(m_strServer.GetBuffer(0));
+	m_addr.sin_port = htons(m_nPort);
+
+	int ret = 0;
+	int error = 0;
+	ret = connect(m_hSocket,(LPSOCKADDR)&m_addr,sizeof(m_addr));
+	if(ret == SOCKET_ERROR)
+	{
+		TRACE("Connect Error: %d \n",(error=WSAGetLastError()));
+		if (error == 10061)
+			AfxMessageBox("error port");
+		return;
+	}
+
+	CString str;
+	str+= char(m_strUser.GetLength());
+	str+= m_strUser;
+	str+= char(m_strPass.GetLength());
+	str+= m_strPass;
+
+	char* buf= str.GetBuffer(0);
+	ret = send(m_hSocket,buf,str.GetLength(),0);
+	if (ret!= str.GetLength())
+	{
+		TRACE("sEND DATA ERROR: %d\n",WSAGetLastError());
+		return;
+	}
+
+	char buff[256];
+	ret = recv(m_hSocket,buff,256,0);
+	if(ret==0)
+	{
+		TRACE("Recv data error:%d\n",WSAGetLastError());
+		return;
+	}
+	buff[ret] = '\0';
+	AfxMessageBox(buff);
+
+	CDialog::OnOK();
+}

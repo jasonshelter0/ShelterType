@@ -1,0 +1,37 @@
+# Personal practice data and local update state
+**/UserData/
+**/TestData/
+**/preferences.json
+**/session.lock
+**/qa-failures.log
+
+# Build products, generated packages and local SDKs
+**/bin/
+**/obj/
+/app/
+/artifacts/
+/work/
+/.vs/
+/.idea/
+/.nuget/
+*.user
+*.suo
+*.pdb
+*.zip
+*.zip.sha256
+
+# Local credentials and configuration
+.env
+.env.*
+!*.example
+*.pfx
+*.p12
+*.key
+hosts.yml
+
+# Shell/editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.bak

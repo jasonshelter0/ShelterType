@@ -1,0 +1,37 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test core, courses, statistics and updates
+        shell: pwsh
+        run: ./test.ps1 -IncludeUpdate
+      - name: Build portable package
+        shell: pwsh
+        run: ./package.ps1
+      - name: Preserve package for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ShelterType-win-x64
+          path: |
+            artifacts/releases/*/ShelterType-win-x64.zip
+            artifacts/releases/*/ShelterType-win-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

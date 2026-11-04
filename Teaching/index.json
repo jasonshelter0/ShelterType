@@ -1,0 +1,38 @@
+[
+  {
+    "Title": "原版英文键盘 · 指法分区",
+    "File": "keyboard-original.png"
+  },
+  {
+    "Title": "原版双手指法示意",
+    "File": "hands-original.png"
+  },
+  {
+    "Title": "原版手指提示位置",
+    "File": "hands-highlight-original.png"
+  },
+  {
+    "Title": "86 版五笔 · 完整字根键盘",
+    "File": "wubi86-keyboard.png"
+  },
+  {
+    "Title": "86 版五笔 · 字根速查",
+    "File": "wubi86-roots.png"
+  },
+  {
+    "Title": "98 版五笔 · 完整字根键盘",
+    "File": "wubi98-keyboard.png"
+  },
+  {
+    "Title": "98 版五笔 · 字根速查",
+    "File": "wubi98-roots.png"
+  },
+  {
+    "Title": "86 版五笔 · 原始单字根总表",
+    "File": "root-atlas86.png"
+  },
+  {
+    "Title": "98 版五笔 · 原始单字根总表",
+    "File": "root-atlas98.png"
+  }
+]

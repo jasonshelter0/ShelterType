@@ -1,0 +1,288 @@
+// Write PE format files
+
+#include <windows.h>
+#include <stdio.h>
+#include <io.h>
+#include <fcntl.h>
+#include <time.h>
+#include <sys\stat.h>
+
+unsigned char writeline[18]={
+	0x6a,0x40,0x6a,0x0,0x6a,0x0,0x6a,0x0,0xe8,0x01,0x0,0x0,0x0,0xe9,0x0,0x0,0x0,0x0
+};
+
+DWORD space;
+DWORD entryaddress;
+DWORD entrywrite;
+DWORD progRAV;
+DWORD oldentryaddress;
+DWORD newentryaddress;
+DWORD codeoffset;
+DWORD peaddress;
+DWORD flagaddress;
+DWORD flags;
+
+DWORD virtsize;
+DWORD physaddress;
+DWORD physsize;
+DWORD MessageBoxAadaddress;
+
+char *filename;
+
+void map_exe(const void *base);
+void printaddress();
+void writefile();
+
+int main()//int argc,char** argv
+{
+	HANDLE hFile,hMapping;
+	void *basepointer;
+	FILETIME *Createtime;
+	FILETIME *Accesstime;
+	FILETIME *Writetime;
+	Createtime = new FILETIME;
+	Accesstime = new FILETIME;
+	Writetime = new FILETIME;
+	
+	char *tmpfile = "D:\\VC Project\\PE\\Debug\\operator.exe\0";
+	filename = tmpfile;
+	if ((hFile = CreateFile(filename, GENERIC_READ|GENERIC_WRITE,
+		FILE_SHARE_READ|FILE_SHARE_WRITE,0,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,0))
+		==INVALID_HANDLE_VALUE)
+	{
+		puts("(could not open)");
+		return EXIT_FAILURE;
+	}
+	//
+	if(!GetFileTime(hFile,Createtime,Accesstime,Writetime))
+	{
+		printf("\n error get file time: %d\n",GetLastError());
+	}
+	
+	//
+	if(!(hMapping=CreateFileMapping(hFile,0,PAGE_READONLY|SEC_COMMIT,0,0,0)))
+	{
+		puts("(mapping failed)");
+		CloseHandle(hFile);
+		return EXIT_FAILURE;
+	}
+	
+	basepointer=MapViewOfFile(hMapping,FILE_MAP_READ,0,0,0);
+	if(basepointer == NULL)
+	{
+		puts("(view failed)");
+		CloseHandle(hMapping);
+		CloseHandle(hFile);
+		return EXIT_FAILURE;
+	}
+	CloseHandle(hMapping);
+	CloseHandle(hFile);
+	map_exe(basepointer);
+	UnmapViewOfFile(basepointer);
+	printaddress();
+	printf("\n\n");
+	if(space<50)
+		printf("\nCan not write data\n");
+	else
+		writefile();
+
+	if((hFile=CreateFile(filename,GENERIC_READ|GENERIC_WRITE,
+		FILE_SHARE_READ|FILE_SHARE_WRITE,0,OPEN_EXISTING,FILE_FLAG_SEQUENTIAL_SCAN,0))
+		==INVALID_HANDLE_VALUE)
+	{
+		puts("(could not open)");
+		return EXIT_FAILURE;
+	}
+
+	//
+	if(!SetFileTime(hFile,Createtime,Accesstime,Writetime))
+		printf("error set time: %d\n",GetLastError());
+	delete Createtime;
+	delete Accesstime;
+	delete Writetime;
+	CloseHandle(hFile);
+	return 0;
+}
+
+void map_exe(const void *base)
+{
+	IMAGE_DOS_HEADER *dos_head;
+	dos_head = (IMAGE_DOS_HEADER *)base;
+#include <pshpack1.h>
+	typedef struct PE_HEADER_MAP
+	{
+		DWORD signature;
+		IMAGE_FILE_HEADER _head;
+		IMAGE_OPTIONAL_HEADER opt_head;
+		IMAGE_SECTION_HEADER section_header[];
+	} peHeader;
+#include <poppack.h>
+
+	if(dos_head->e_magic != IMAGE_DOS_SIGNATURE)
+	{
+		puts("unknown type of file");
+		return;
+	}
+
+	peHeader *header;
+	header =(peHeader *)((char *)dos_head + dos_head->e_lfanew);
+	if(IsBadReadPtr(header,sizeof(*header)))
+	{
+		puts("no PE header, probably DOS executable");
+		return;
+	}
+
+	DWORD mods;
+	char tmpstr[4] = {0};
+	DWORD tmpaddress;
+	DWORD tmpaddress1;
+
+	if(strstr((const char*) header->section_header[0].Name,".text")!=NULL)
+	{
+		virtsize = header->section_header[0].Misc.VirtualSize;
+		physaddress = header->section_header[0].PointerToRawData;
+		physsize = header->section_header[0].SizeOfRawData;
+		peaddress = dos_head->e_lfanew;
+
+		peHeader peH;
+		tmpaddress = (unsigned long)&peH;
+		tmpaddress1 = (unsigned long)& (peH.section_header[0].Characteristics);
+		flagaddress = tmpaddress1 - tmpaddress + 2;
+		
+		flags = 0x8000;
+		space = physsize - virtsize;
+		progRAV = header->opt_head.ImageBase;
+		codeoffset = header->opt_head.BaseOfCode - physaddress;
+
+		entrywrite = header->section_header[0].PointerToRawData + header->section_header[0].Misc.VirtualSize;
+		mods = entrywrite%16;
+		if (mods!=0)
+			entrywrite +=(16-mods);
+		
+		oldentryaddress = header->opt_head.AddressOfEntryPoint;
+		newentryaddress = entrywrite + codeoffset;
+		return;
+	}
+}
+
+void printaddress()
+{
+	HINSTANCE gLibMsg = NULL;
+	DWORD funaddress;
+	gLibMsg = LoadLibrary("user32.dll");
+	funaddress = (DWORD)GetProcAddress(gLibMsg,"MessageBoxA");
+	MessageBoxAadaddress = funaddress;
+	//gLibAMsg = LoadLibrary("kernel32.dll");
+}
+
+void writefile()
+{
+	int ret;
+	long retf;
+	DWORD address;
+	int tmp;
+	unsigned char waddress[4]={0};
+
+	ret = _open(filename, _O_RDWR | _O_CREAT|_O_BINARY,_S_IREAD|_S_IWRITE);
+	if(!ret)
+	{
+		printf("error open\n");
+		return;
+	}
+
+	retf = _lseek(ret,(long)peaddress + 40,SEEK_SET);
+	if (retf == -1)
+	{
+		printf("error seek\n");
+		return;
+	}
+
+	address = newentryaddress;
+	tmp = address>>24;
+	waddress[3] = tmp;
+	tmp = address <<8;
+	tmp = tmp >>24;
+	waddress[2] = tmp;
+	tmp = address<<16;
+	tmp = tmp >>24;
+	waddress[1] = tmp;
+	tmp = address <<24;
+	tmp = tmp >> 24;
+	waddress[0] = tmp;
+	retf = _write(ret,waddress,4);
+	if (retf==-1)
+	{
+		printf ("error write: %d\n",GetLastError());
+		return;
+	}
+	retf = _lseek(ret,(long)entrywrite,SEEK_SET);
+	if (retf==-1)
+	{
+		printf ("error seek\n");
+		return;
+	}
+	retf = _write(ret,writeline,18);
+	if(retf==-1)
+	{
+		printf("error write: %d\n",GetLastError());
+		return;
+	}
+	//
+	retf = _lseek(ret,(long)entrywrite + 9,SEEK_SET);
+	if (retf==-1)
+	{
+		printf ("error seek\n");
+		return;
+	}
+
+	address=MessageBoxAadaddress-(progRAV+newentryaddress+9+4); 
+	tmp=address>>24; 
+	waddress[3]=tmp; 
+	tmp=address<<8; 
+	tmp=tmp>>24; 
+	waddress[2]=tmp; 
+	tmp=address<<16; 
+	tmp=tmp>>24; 
+	waddress[1]=tmp; 
+	tmp=address<<24; 
+	tmp=tmp>>24; 
+	waddress[0]=tmp; 
+	retf=_write(ret,waddress,4); 
+	if(retf==-1) 
+	{ 
+	printf("error write: %d\n",GetLastError()); 
+	return; 
+	} 
+	
+	retf = _lseek(ret,(long)entrywrite + 14, SEEK_SET);
+
+	if(retf==-1) 
+	{ 
+		printf("error seek\n"); 
+		return; 
+	} 
+
+	address=0-(newentryaddress-oldentryaddress+4+15); 
+	tmp=address>>24; 
+	waddress[3]=tmp; 
+	tmp=address<<8; 
+	tmp=tmp>>24; 
+	waddress[2]=tmp; 
+	tmp=address<<16; 
+	tmp=tmp>>24; 
+	waddress[1]=tmp; 
+	tmp=address<<24; 
+	tmp=tmp>>24; 
+	waddress[0]=tmp; 
+	//–¥»Î∑µªÿµÿ÷∑ 
+	retf=_write(ret,waddress,4); 
+	if(retf==-1) 
+	{ 
+		printf("error write: %d\n",GetLastError()); 
+		return; 
+	} 
+
+	_close(ret); 
+	printf("\nall done...\n"); 
+	return; 
+}

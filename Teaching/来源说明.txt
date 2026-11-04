@@ -1,0 +1,27 @@
+原版教学资源来源
+
+所有图像均从本机 D:\GADGETS\KINGSOFT 原装文件以资源只读方式提取。
+程序运行时不加载原版 DLL。
+
+keyboard-original.png: xtypectrls.dll BITMAP 203
+wubi86-keyboard.png: xtypectrls.dll BITMAP 369
+wubi98-keyboard.png: xtypectrls.dll BITMAP 427
+wubi86-roots.png: xtypectrls.dll BITMAP 397
+wubi98-roots.png: xtypectrls.dll BITMAP 428
+hands-original.png: Bitmap\1024_CH.dll BITMAP HAND_CLEAR
+hands-highlight-original.png: Bitmap\1024_CH.dll BITMAP HAND_ON
+
+roots86/A.png 至 Y.png：以 THEMEDATA 398 内原始 xPos/yPos/width/height 和 KeyCode 对 BITMAP 397 精确裁切。
+roots98/A.png 至 Y.png：以 THEMEDATA 426 内原始坐标和 KeyCode 对 BITMAP 428 精确裁切。
+Z 键无五笔字根，未作为字根学习项导出。
+原图像分辨率有限，放大后仍保持原始像素，不伪造字根。
+
+原英文键盘四种主要指法分区颜色：小指紫、无名指蓝紫、中指品红、食指青蓝。
+空格键原图为青蓝；新绘制教学键盘将拇指单独标色以便识别。
+
+单字根图像：KAide.dll 自定义资源 BMP/101。
+该资源头长224字节；小86/98字库为行跨度24字节×450行；大86/98为48字节×900行，按单色位图逐位解码。
+大字库25行分别对应 A 至 Y，每行10个36×36字根槽位，空白槽位不导出。
+glyphs86：190个真实字根；glyphs98：214个真实字根。原始黑字白底，不包含答案字母。
+root-glyphs86.json / root-glyphs98.json：Id（原字根代号，如g0）、Key（所属键，如g）、ImagePath（应用相对路径）。
+原始wbpic86.dic字典确认为王→g0，中→k0h2，现→g0m3q7，与导出图形对应。

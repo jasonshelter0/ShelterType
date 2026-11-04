@@ -1,0 +1,167 @@
+Option Explicit
+
+Private Sub Command1_Click()
+    On Error GoTo fileError
+    Dim a As Word.Application
+    Dim doc As Word.Document
+    Dim range As Word.range
+    
+    CommonDialog1.CancelError = True
+    CommonDialog1.ShowOpen
+    Set a = New Word.Application
+    a.Visible = False
+    Set doc = a.Documents.Open(CommonDialog1.FileName)
+    
+    Set range = doc.range
+    Text1.Text = range.Text
+    a.Documents.Close
+    a.Quit
+    Exit Sub
+    
+fileError:
+        MsgBox "File Error"
+End Sub
+
+Private Sub Command2_Click()
+    On Error Resume Next
+    
+    CommonDialog1.CancelError = True
+    CommonDialog1.ShowOpen
+    Dim sourceFileName As String
+    Dim targetFileName As String
+    sourceFileName = CommonDialog1.FileName
+    targetFileName = Left(sourceFileName, Len(sourceFileName) - 4) + ".txt"
+    WordConverterX1.ConvertWordDoc sourceFileName, targetFileName, 2
+    Dim fso As Object, MyFile As Object, temp As String
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set MyFile = fso.OpenTextFile(targetFileName, 1, True)
+    temp = MyFile.readall
+    MyFile.Close
+    Set MyFile = Nothing
+    Set fso = Nothing
+    
+    Text1.Text = temp
+
+End Sub
+
+Private Sub Command3_Click()
+    
+    Text1.Text = Clipboard.GetText
+End Sub
+
+Private Sub Command4_Click()
+    WebBrowser1.SetFocus
+    SendKeys ("^A")
+    SendKeys ("^C")
+
+End Sub
+
+Private Sub Decode_Click()
+    DecodeText.Text = URLDecoding(EncodeText.Text)
+End Sub
+
+Private Sub Encode_Click()
+    EncodeText.Text = URLEncoding(EncodeText.Text)
+End Sub
+
+Function URLEncoding(vstrIn As String)
+    Dim strReturn   As String
+    Dim ThisChr     As String
+    Dim innerCode   As String
+    Dim i           As Integer
+    Dim Hight8      As String
+    Dim Low8        As String
+    
+    strReturn = ""
+    For i = 1 To Len(vstrIn)
+        ThisChr = Mid(vstrIn, i, 1)
+        If Abs(Asc(ThisChr)) < &HFF Then
+            strReturn = strReturn & ThisChr
+        Else
+            innerCode = Asc(ThisChr)
+            If innerCode < 0 Then
+                innerCode = innerCode + CLng(&H10000)
+            End If
+            Hight8 = (innerCode And &HFF00) \ &HFF
+            Low8 = innerCode And &HFF
+            strReturn = strReturn & "%" & Hex(Hight8) & "%" & Hex(Low8)
+        End If
+        'Debug.Print strReturn
+    Next
+    URLEncoding = strReturn
+End Function
+
+Function URLDecoding(vstrIn As String)
+    Dim strReturn   As String
+    Dim ThisChr     As String
+    Dim innerCode   As String
+    Dim i           As Integer
+    Dim HightCode   As String
+    Dim LowCode     As String
+    Dim temp
+    
+    strReturn = ""
+    For i = 1 To Len(vstrIn)
+        ThisChr = Mid(vstrIn, i, 1)
+        If ThisChr <> "%" Then
+            strReturn = strReturn & ThisChr
+        ElseIf i = Len(vstrIn) Then
+            strReturn = strReturn & ThisChr
+        ElseIf Mid(vstrIn, i + 1, 1) = "%" Then
+            strReturn = strReturn & ThisChr
+        Else
+            ThisChr = Mid(vstrIn, i + 1, 5)
+            temp = Split(ThisChr, "%")
+            HightCode = temp(0)
+            LowCode = temp(1)
+            
+            innerCode = HEX16(HightCode & LowCode)
+            If innerCode > 0 Then
+                innerCode = innerCode - &H10000
+            End If
+            ThisChr = Chr(innerCode)
+            strReturn = strReturn & ThisChr
+            i = i + 5
+        End If
+        
+    Next
+    URLDecoding = strReturn
+End Function
+
+Function HEX16(str As String) As Long
+    Dim astr As Long, bstr As Long, dstr As Long, estr As Long, tmpI As String
+    
+    If (IsNumeric(Left(str, 1))) Then
+        astr = CInt(Left(str, 1)) * 16 ^ 3
+    Else
+        tmpI = Left(str, 1)
+        astr = Switch(tmpI = "A", 10, tmpI = "B", 11, tmpI = "C", 12, tmpI = "D", 13, tmpI = "E", 14, tmpI = "F", 15) * 16 ^ 3
+    End If
+    
+    If (IsNumeric(Mid(str, 2, 1))) Then
+        bstr = CInt(Mid(str, 2, 1)) * 16 ^ 2
+    Else
+        tmpI = Mid(str, 2, 1)
+        bstr = Switch(tmpI = "A", 10, tmpI = "B", 11, tmpI = "C", 12, tmpI = "D", 13, tmpI = "E", 14, tmpI = "F", 15) * 16 ^ 2
+    End If
+    
+    If (IsNumeric(Mid(str, 3, 1))) Then
+        dstr = CInt(Mid(str, 3, 1)) * 16
+    Else
+        tmpI = Mid(str, 3, 1)
+        dstr = Switch(tmpI = "A", 10, tmpI = "B", 11, tmpI = "C", 12, tmpI = "D", 13, tmpI = "E", 14, tmpI = "F", 15) * 16
+    End If
+    
+    If (IsNumeric(Mid(str, 4, 1))) Then
+        estr = CInt(Mid(str, 4, 1))
+    Else
+        tmpI = Mid(str, 4, 1)
+        estr = Switch(tmpI = "A", 10, tmpI = "B", 11, tmpI = "C", 12, tmpI = "D", 13, tmpI = "E", 14, tmpI = "F", 15)
+    End If
+    
+    HEX16 = astr + bstr + dstr + estr
+End Function
+
+Private Sub ReadHTML_Click()
+    Text1.Text = Inet1.OpenURL("http://www.iciba.net")
+End Sub

@@ -1,0 +1,266 @@
+// BitmapButtonDlg.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "BitmapButton.h"
+#include "BitmapButtonDlg.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+// CBitmapButtonDlg dialog
+
+CBitmapButtonDlg::CBitmapButtonDlg(CWnd* pParent /*=NULL*/)
+	: CDialog(CBitmapButtonDlg::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CBitmapButtonDlg)
+		// NOTE: the ClassWizard will add member initialization here
+	//}}AFX_DATA_INIT
+	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+}
+
+void CBitmapButtonDlg::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CBitmapButtonDlg)
+	DDX_Control(pDX, IDC_BUTTON_PLAY, m_Play);
+	DDX_Control(pDX, IDC_BUTTON_POWER, m_Power);
+	DDX_Control(pDX, IDC_EDIT1, InputEdit);
+	//}}AFX_DATA_MAP
+}
+
+BEGIN_MESSAGE_MAP(CBitmapButtonDlg, CDialog)
+	//{{AFX_MSG_MAP(CBitmapButtonDlg)
+	ON_WM_PAINT()
+	ON_WM_QUERYDRAGICON()
+	ON_WM_LBUTTONDOWN()
+	ON_WM_LBUTTONUP()
+	ON_WM_MOUSEMOVE()
+	ON_BN_CLICKED(IDC_BUTTON_POWER, OnButtonPower)
+	ON_BN_CLICKED(IDC_BUTTON_PLAY, OnButtonPlay)
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CBitmapButtonDlg message handlers
+
+BOOL CBitmapButtonDlg::OnInitDialog()
+{
+	CDialog::OnInitDialog();
+
+	SetIcon(m_hIcon, TRUE);			// Set big icon
+	SetIcon(m_hIcon, FALSE);		// Set small icon
+	
+	// TODO: Add extra initialization here
+	m_Play.LoadBitmaps(PLAYU,PLAYD,PLAYF,PLAYX);
+	m_Power.LoadBitmaps(POWERONU,POWEROND,POWERONF);
+	return TRUE;  // return TRUE  unless you set the focus to a control
+}
+
+// If you add a minimize button to your dialog, you will need the code below
+//  to draw the icon.  For MFC applications using the document/view model,
+//  this is automatically done for you by the framework.
+
+void CBitmapButtonDlg::OnPaint() 
+{
+	if (IsIconic())
+	{
+		CPaintDC dc(this); // device context for painting
+
+		SendMessage(WM_ICONERASEBKGND, (WPARAM) dc.GetSafeHdc(), 0);
+
+		// Center icon in client rectangle
+		int cxIcon = GetSystemMetrics(SM_CXICON);
+		int cyIcon = GetSystemMetrics(SM_CYICON);
+		CRect rect;
+		GetClientRect(&rect);
+		int x = (rect.Width() - cxIcon + 1) / 2;
+		int y = (rect.Height() - cyIcon + 1) / 2;
+
+		// Draw the icon
+		dc.DrawIcon(x, y, m_hIcon);
+	}
+	else
+	{
+		CDialog::OnPaint();
+	}
+}
+
+HCURSOR CBitmapButtonDlg::OnQueryDragIcon()
+{
+	return (HCURSOR) m_hIcon;
+}
+
+void CBitmapButtonDlg::OnMouseMove(UINT nFlags, CPoint point) 
+{
+	// TODO: Add your message handler code here and/or call default
+	CWnd * pWnd; 
+	HCURSOR MyCursor; 
+	CRgn m_regionPower; //Region of POWER Button
+	CRgn m_regionPlay; //Region of PLAY Button
+
+	//Create bitmap button rect
+	CWnd *pPower,*pPlay;
+	CRect prc,lrc;
+	pPower=GetDlgItem(IDC_BUTTON_POWER);
+	pPower->GetWindowRect(&prc);
+	pPower->ScreenToClient(&prc);
+	pPlay = GetDlgItem(IDC_BUTTON_PLAY);
+	pPlay->GetClientRect (&lrc);
+	char buffer[5];
+	itoa(prc.top  ,buffer,10);
+	SetWindowText (buffer);
+	//MessageBox (CString(buffer) );
+
+	m_regionPower.CreateRectRgn (prc.left ,prc.top,prc.right ,prc.bottom ); 
+	m_regionPlay.CreateRectRgn(lrc.left ,lrc.top ,lrc.right ,lrc.bottom );
+	CString ShowString0 = "mouse move" ;
+	CString ShowString1;
+	CString ShowString2;
+
+	m_bPlay = FALSE;
+	m_bPower= FALSE;
+	
+	itoa(point.x ,buffer,10);
+	ShowString1 = buffer ;
+	itoa (point.y ,buffer,10);
+	ShowString1 = ShowString1 + "  " + CString(buffer);
+
+	//ScreenToClient(&point);
+	if (m_regionPower.PtInRegion(point))
+	{
+		m_bPower = TRUE; 
+		pWnd= GetDlgItem(IDC_BUTTON_POWER);
+		pWnd->SetFocus(); 
+		//SetCapture();
+		InputEdit.SetWindowText(ShowString1);
+		InputEdit.ShowWindow(TRUE); 
+		MyCursor = AfxGetApp()->LoadCursor(IDC_MYCURSOR); 
+		::SetCursor(MyCursor);
+		VERIFY(m_Play.LoadBitmaps(PLAYU,PLAYD,PLAYF,PLAYX));
+		m_bPressedPlay = FALSE;
+		return;
+	}
+
+	if (m_regionPlay.PtInRegion(point))
+	{ 
+		if (m_bPowerOn) 
+		{
+			m_bPlay = TRUE; 
+			pWnd= GetDlgItem(IDC_BUTTON_PLAY);
+			pWnd->SetFocus(); 
+			//SetCapture();
+			InputEdit.SetWindowText(ShowString0 + "Play");
+			InputEdit.ShowWindow(TRUE);
+			MyCursor = AfxGetApp()->LoadCursor(IDC_MYCURSOR);
+			::SetCursor(MyCursor); 
+			VERIFY(m_Power.LoadBitmaps(POWERONU,POWEROND,POWERONF));
+		}
+		else 
+		{
+			ReleaseCapture();
+			ShowString2 = "Power Off";
+			InputEdit.SetWindowText(ShowString0+ShowString2);
+			InputEdit.ShowWindow(TRUE); 
+			VERIFY(m_Power.LoadBitmaps(POWEROFU,POWEROFD,POWEROFF));
+		} 
+		m_bPressedPower= FALSE;
+		return;
+	}
+
+	//ReleaseCapture();
+	InputEdit.SetWindowText(ShowString1);
+	InputEdit.ShowWindow(TRUE); 
+	pWnd= GetDlgItem(IDOK);
+	pWnd->SetFocus(); 
+	//m_Play.AutoLoad(IDC_BUTTON_PLAY, this);
+	//m_Play.LoadBitmaps(PLAYU,PLAYD,PLAYF,PLAYX);
+	if (m_bPowerOn)
+		VERIFY(m_Power.LoadBitmaps(POWERONU,POWEROND,POWERONF));
+	else
+		VERIFY(m_Power.LoadBitmaps(POWEROFU,POWEROFD,POWEROFF));
+	m_bPressedPlay = FALSE;
+	m_bPressedPower= FALSE;
+
+	CDialog::OnMouseMove(nFlags, point);
+}
+
+void CBitmapButtonDlg::OnLButtonDown(UINT nFlags, CPoint point) 
+{
+	// TODO: Add your message handler code here and/or call default
+	CWnd *pWnd;
+	if (m_bPlay && m_bPowerOn) 
+	{ 
+		// Change Focus so as to Change the bitmap of m_Play
+		pWnd= GetDlgItem(IDOK);
+		pWnd->SetFocus(); 
+		VERIFY(m_Play.LoadBitmaps(PLAYD));
+		m_Play.UpdateWindow();
+		m_Play.Invalidate(TRUE);
+		OnButtonPlay(); 
+		m_bPressedPlay = TRUE;
+	} 
+
+	if (m_bPower== TRUE) 
+	{ 
+		// Change Focus so as to Change the bitmap of m_Power
+		pWnd= GetDlgItem(IDOK);
+		pWnd->SetFocus(); 
+		if (m_bPowerOn)
+			VERIFY(m_Power.LoadBitmaps(POWEROND));
+		else
+			VERIFY(m_Power.LoadBitmaps(POWEROFD)); 
+		m_Power.UpdateWindow();
+		m_Power.Invalidate(TRUE);
+		OnButtonPower(); 
+		m_bPressedPower = TRUE;
+	} 
+
+	CDialog::OnLButtonDown(nFlags, point);
+}
+
+void CBitmapButtonDlg::OnLButtonUp(UINT nFlags, CPoint point) 
+{
+	// TODO: Add your message handler code here and/or call default
+	CWnd * pWnd; 
+	if (m_bPressedPlay == TRUE) 
+	{
+		pWnd= GetDlgItem(IDOK);
+		pWnd->SetFocus(); 
+		VERIFY(m_Play.LoadBitmaps(PLAYF));
+		m_Play.UpdateWindow();
+		m_Play.Invalidate(TRUE);
+		m_bPressedPlay = FALSE;
+	} 
+
+	if (m_bPressedPower == TRUE) 
+	{
+		pWnd= GetDlgItem(IDOK);
+		pWnd->SetFocus(); 
+		if (m_bPowerOn)
+			VERIFY(m_Power.LoadBitmaps(POWERONF));
+		else
+			VERIFY(m_Power.LoadBitmaps(POWEROFF)); 
+		m_Power.UpdateWindow();
+		m_Power.Invalidate(TRUE);
+		m_bPressedPower = FALSE;
+	} 
+
+	CDialog::OnLButtonUp(nFlags, point);
+}
+
+void CBitmapButtonDlg::OnButtonPower() 
+{
+	// TODO: Add your control notification handler code here
+	
+}
+
+void CBitmapButtonDlg::OnButtonPlay() 
+{
+	// TODO: Add your control notification handler code here
+	
+}

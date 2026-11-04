@@ -1,0 +1,137 @@
+Const SWP_NOSIZE = &H1
+Const SWP_NOMOVE = &H2
+Const HWND_TOPMOST = -1
+Const SWP_SHOWWINDOW = &H40
+Const strWebSite = "The object you drag is a web document, the URL is"
+Const strWebImage = "The object you drag is a picture, the file is"
+     
+Private Declare Function SetWindowPos Lib _
+        "user32" (ByVal hwnd As Long, _
+        ByVal hWndInsertAfter As Long, ByVal X As Long, _
+        ByVal Y As Long, ByVal cx As Long, ByVal cy As Long, _
+        ByVal wFlags As Long) As Long
+     
+Private Sub Form_Load()
+    FrmMain.OLEDropMode = 1
+    TxtTarget.OLEDropMode = 1
+    PicTarget.OLEDropMode = 1
+    SetWindowPos Me.hwnd, HWND_TOPMOST, 0, 0, 0, 0, _
+                SWP_NOMOVE Or SWP_NOSIZE Or SWP_SHOWWINDOW
+End Sub
+
+Private Sub Form_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Call OLEDragDrop(Data, Effect, Button, Shift, X, Y)
+End Sub
+
+Private Sub Form_OLEDragOver(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+    Call OLEDragOver(Data, Effect, Button, Shift, X, Y, State)
+End Sub
+
+Private Sub Form_OLEGiveFeedback(Effect As Long, DefaultCursors As Boolean)
+    Call Source_OLEGiveFeedback(Form, Effect, DefaultCursors)
+End Sub
+
+'==========  Picture  =====================
+Private Sub PicTarget_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Call OLEDragDrop(Data, Effect, Button, Shift, X, Y)
+End Sub
+
+Private Sub PicTarget_OLEDragOver(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+    Call OLEDragOver(Data, Effect, Button, Shift, X, Y, State)
+End Sub
+
+'==========  Text  =====================
+Private Sub TxtTarget_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Call OLEDragDrop(Data, Effect, Button, Shift, X, Y)
+End Sub
+
+Private Sub TxtTarget_OLEDragOver(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+    Call OLEDragOver(Data, Effect, Button, Shift, X, Y, State)
+End Sub
+
+
+'=========  ×Ô¶¨Òå  ========================
+Private Sub OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+On Error Resume Next
+    Effect = vbDropEffectCopy
+    If Data.GetFormat(vbCFText) Then
+        TxtTarget.Text = Data.GetData(vbCFText)
+    ElseIf Data.GetFormat(vbCFDIB) Then
+        PicTarget.Picture = Data.GetData(vbCFDIB)
+    ElseIf Data.GetFormat(vbCFBitmap) Then
+        PicTarget.Picture = Data.GetData(vbCFBitmap)
+    ElseIf Data.GetFormat(vbCFFiles) Then
+        Dim strFile
+        For Each strFile In Data.Files
+            DropFile TxtTarget, strFile
+            PicTarget.Picture = LoadPicture(strFile)
+        Next strFile
+   End If
+End Sub
+
+Private Sub OLEDragOver(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+    If Data.GetFormat(vbCFFiles) Then
+        'If the data is in the proper format, inform the source of the action to be taken
+        Effect = vbDropEffectCopy And Effect
+        Exit Sub
+    ElseIf Data.GetFormat(vbCFText) Then
+        Effect = vbDropEffectCopy
+        Exit Sub
+    ElseIf Data.GetFormat(vbCFBitmap) Then
+        Effect = vbDropEffectCopy
+        Exit Sub
+    ElseIf Data.GetFormat(vbCFDIB) Then
+        Effect = vbDropEffectCopy
+        Exit Sub
+    End If
+    'If the data is not desired format, no drop
+    Effect = vbDropEffectNone
+End Sub
+
+Private Sub Source_OLEGiveFeedback(ctlTarget, Effect As Long, DefaultCursors As Boolean)
+      ctlTarget.MousePointer = vbCustom
+      ctlTarget.MouseIcon = ImgCopy.Picture
+
+   DefaultCursors = False
+   If Effect = vbDropEffectNone Then
+      Screen.MousePointer = vbNoDrop
+   ElseIf Effect = vbDropEffectCopy Then
+      Screen.MousePointer = vbCustom
+      Screen.MouseIcon = ImgCopy.Picture
+   ElseIf Effect = (vbDropEffectCopy Or _
+         vbDropEffectScroll) Then
+      Screen.MousePointer = vbCustom
+      Screen.MouseIcon = ImgCopySrl.Picture
+   ElseIf Effect = vbDropEffectMove Then
+      Screen.MousePointer = vbCustom
+      Screen.MouseIcon = ImgMove.Picture
+   ElseIf Effect = (vbDropEffectMove Or _
+         vbDropEffectScroll) Then
+      Screen.MousePointer = vbCustom
+      Screen.MouseIcon = ImgMoveSrl.Picture
+   Else
+      ' If some new format is added that we do not
+      '   understand, allow OLE to handle it with
+      '   correct defaults.
+      DefaultCursors = True
+   End If
+End Sub
+
+Sub DropFile(ByVal txt As TextBox, ByVal strFN$)
+    Dim iFile As Integer
+    iFile = FreeFile
+
+    Open strFN For Input Access Read Lock Read Write As #iFile
+    Dim Str$, strLine$
+    While Not EOF(iFile) And Len(Str) <= 32000
+        Line Input #iFile, strLine$
+        If Str <> "" Then Str = Str & vbCrLf
+        Str = Str & strLine
+    Wend
+    Close #iFile
+
+    'txt.SelStart = Len(txt)
+    'txt.SelLength = 0
+    'txt.SelText = Str
+    txt.Text = Str
+End Sub

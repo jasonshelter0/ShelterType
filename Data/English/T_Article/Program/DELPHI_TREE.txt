@@ -1,0 +1,330 @@
+unit pcTree;
+
+interface
+
+uses classes, pcList;
+
+type
+  TpcTree = class;
+
+  TpcTreeItem = ^RpcTreeItem;
+  RpcTreeItem = record
+    Parent : TpcTreeItem;
+    Data : pointer;
+    List : TpcList;
+  end;
+
+  TIterProc = procedure(Item : TpcTreeItem; Index : integer; var ContinueIterate : boolean;
+    IterateData : pointer);
+
+  TItemSaveEvent = procedure(Sender : TObject; Item : TpcTreeItem; Stream : TStream) of object;
+
+  TpcTreeItemDelete = procedure(Sender : TObject; Item : TpcTreeItem; Data : pointer) of object;
+
+  TpcTree = class
+  private
+    FRoot : TpcTreeItem;
+    FCount : integer;
+    FOnItemSave : TItemSaveEvent;
+    FOnItemLoad : TItemSaveEvent;
+    FOnItemDelete : TpcTreeItemDelete;
+    function GetItem(index : integer) : TpcTreeItem;
+  protected
+    procedure TriggerItemSaveEvent(Item : TpcTreeItem; Stream : TStream); virtual;
+    procedure TriggerItemLoadEvent(Item : TpcTreeItem; Stream : TStream); virtual;
+    procedure TriggerItemDeleteEvent(Item : TpcTreeItem; Data : pointer); virtual;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function AddItem(Parent : TpcTreeItem; Value : pointer) : TpcTreeItem;
+    function InsertItem(Parent : TpcTreeItem; Index : integer; Value : pointer) : TpcTreeItem;
+    procedure DeleteItem(Item : TpcTreeItem);
+    procedure MoveTo(Item, NewParent : TpcTreeItem);
+    procedure Clear;
+    function GetIndex(Item : TpcTreeItem) : Integer;
+    function GetAbsIndex(Item : TpcTreeItem) : Integer;
+    procedure Iterate(IterateProc : TIterProc; IterateData : pointer);
+    procedure SaveToStream(Stream : TStream); virtual;
+    procedure LoadFromStream(Stream : TStream); virtual;
+    procedure SaveSubTreeToStream(Item : TpcTreeItem; Stream : TStream); virtual;
+    procedure LoadSubTreeFromStream(Item : TpcTreeItem; Stream : TStream); virtual;
+    property Count : Integer read FCount; { Public }
+    property Item[index : integer] : TpcTreeItem read GetItem; { Public }
+    property OnItemSave : TItemSaveEvent read FOnItemSave write FOnItemSave;
+    property OnItemLoad : TItemSaveEvent read FOnItemLoad write FOnItemLoad;
+    property OnItemDelete : TpcTreeItemDelete read FOnItemDelete write FOnItemDelete;
+    property Root : TpcTreeItem read FRoot;
+  end;
+
+{Binary Tree}
+
+TBTree = class
+  private
+    froot: String;
+    fRTree: TBTree;
+    fLTree: TBTree;
+  public
+   property Root:String read froot;
+   constructor Create(ACaption:String);
+   property  L:TBTree read fLTree write fLTree;
+   property  R:TBTree read fRTree write fRTree;
+ end;
+
+implementation
+
+procedure TpcTree.Iterate(IterateProc : TIterProc; IterateData : pointer);
+var
+  j : integer;
+  DoContinue : boolean;
+
+  procedure IntIterate(Item : TpcTreeItem);
+  var
+    i : integer;
+  begin
+    inc(j);
+    if j >= 0 then IterateProc(Item, j, DoContinue, IterateData);
+    if not (DoContinue) then exit;
+    for i := 0 to Item^.List.Count - 1 do
+    begin
+      IntIterate(TpcTreeItem(Item.List[i]));
+      if not (DoContinue) then exit;
+    end;
+  end;
+
+begin
+  j := -2;
+  DoContinue := true;
+  IntIterate(FRoot);
+end;
+
+function TpcTree.GetItem(index : integer) : TpcTreeItem;
+type
+  PGIRec = ^TGIRec;
+  TGIRec = record
+    j : integer;
+    TSI : TpcTreeItem;
+  end;
+var
+  GIRec : TGIRec;
+
+  procedure IntGetItem(Item : TpcTreeItem; Index : integer; var ContinueIterate : boolean;
+    IterateData : pointer);
+  begin
+    if Index = PGIRec(IterateData)^.j then
+    begin
+      PGIRec(IterateData)^.TSI := Item;
+      ContinueIterate := false;
+    end;
+  end;
+
+begin
+  if (index < 0) or (index >= FCount) then
+  begin
+    result := nil;
+    exit;
+  end;
+  GIRec.TSI := nil;
+  GIRec.j := index;
+  Iterate(@IntGetItem, @GIRec);
+  result := GIRec.TSI;
+end;
+
+function TpcTree.AddItem(Parent : TpcTreeItem; Value : pointer) : TpcTreeItem; { public }
+var
+  TI : TpcTreeItem;
+begin
+  New(TI);
+  TI^.List := TpcList.Create;
+  TI^.Data := Value;
+  if Parent = nil then
+    FRoot^.List.Add(TI)
+  else
+    Parent^.List.Add(TI);
+  if Parent = nil then
+    TI^.Parent := FRoot
+  else
+    TI^.Parent := Parent;
+  result := ti;
+  inc(FCount);
+end; { AddItem }
+
+function TpcTree.InsertItem(Parent : TpcTreeItem; Index : integer; Value : pointer) : TpcTreeItem; { public }
+var
+  TI : TpcTreeItem;
+begin
+  New(TI);
+  TI^.List := TpcList.Create;
+  TI^.Data := Value;
+  if Parent = nil then
+  begin
+    FRoot^.List.Insert(index, TI);
+    TI^.Parent := FRoot;
+  end
+  else
+  begin
+    Parent^.List.Insert(Index, TI);
+    TI^.Parent := Parent;
+  end;
+  result := ti;
+  inc(FCount);
+end; { InsertItem }
+
+procedure TpcTree.DeleteItem(Item : TpcTreeItem); { public }
+begin
+  if (Item = nil) then exit;
+  while Item^.List.Count > 0 do
+    DeleteItem(Item^.List[0]);
+  Item^.List.Free;
+  Item^.Parent^.List.Remove(Item);
+  TriggerItemDeleteEvent(Item, Item^.Data);
+  Dispose(Item);
+  dec(FCount);
+end; { DeleteItem }
+
+procedure TpcTree.Clear; { public }
+begin
+  while FRoot^.List.Count > 0 do
+    DeleteItem(FRoot^.List[0]);
+end; { Clear }
+
+procedure TpcTree.MoveTo(Item, NewParent : TpcTreeItem); { public }
+begin
+  if Item = nil then exit;
+  Item^.Parent.List.Remove(Item);
+  if NewParent = nil then NewParent := FRoot;
+  NewParent^.List.Add(Item);
+  Item^.Parent := NewParent;
+end; { MoveTo }
+
+function TpcTree.GetIndex(Item : TpcTreeItem) : Integer; { public }
+begin
+  result := Item^.Parent^.List.IndexOf(Item);
+end; { GetIndex }
+
+function TpcTree.GetAbsIndex(Item : TpcTreeItem) : Integer; { public }
+type
+  PGIRec = ^TGIRec;
+  TGIRec = record
+    j : integer;
+    TSI : TpcTreeItem;
+  end;
+var
+  GIRec : TGIRec;
+
+  procedure IntGetIndex(Item : TpcTreeItem; Index : integer; var ContinueIterate : boolean;
+    IterateData : pointer);
+  begin
+    if PGIRec(IterateData)^.TSI = Item then
+    begin
+      PGIRec(IterateData)^.j := index;
+      ContinueIterate := false;
+    end;
+  end;
+
+begin
+  if Item = nil then
+  begin result := -1;
+    exit;
+  end;
+  GIRec.j := -1;
+  GIRec.TSI := Item;
+  Iterate(@IntGetIndex, @GIRec);
+  result := GIRec.j;
+end;
+
+procedure TpcTree.SaveToStream(Stream : TStream); { public }
+begin
+  SaveSubTreeToStream(FRoot, Stream);
+end; { SaveToStream }
+
+procedure TpcTree.LoadFromStream(Stream : TStream); { public }
+begin
+  LoadSubTreeFromStream(FRoot, Stream);
+end; { LoadFromStream }
+
+procedure TpcTree.SaveSubTreeToStream(Item : TpcTreeItem; Stream : TStream);
+
+  procedure IntSave(Item : TpcTreeItem; Stream : TStream; Tree : TpcTree);
+  var
+    i, j : integer;
+  begin
+    i := Item^.List.Count;
+    Stream.WriteBuffer(i, sizeof(integer));
+    if (Item <> Tree.FRoot) then
+      Tree.TriggerItemSaveEvent(Item, Stream);
+    for j := 0 to i - 1 do
+      IntSave(TpcTreeItem(Item^.List[j]), Stream, Tree);
+  end;
+
+begin
+  if Item = nil then Item := FRoot;
+  IntSave(Item, Stream, self);
+end;
+
+procedure TpcTree.LoadSubTreeFromStream(Item : TpcTreeItem; Stream : TStream);
+
+  procedure IntLoad(Item : TpcTreeItem; Stream : TStream; Tree : TpcTree);
+  var
+    i, j : integer;
+    NewItem : TpcTreeItem;
+  begin
+    Stream.ReadBuffer(i, sizeof(integer));
+    if Item <> Tree.FRoot then
+      Tree.TriggerItemLoadEvent(Item, Stream);
+    for j := 0 to i - 1 do
+    begin
+      NewItem := Tree.AddItem(Item, nil);
+      IntLoad(NewItem, Stream, Tree);
+    end;
+  end;
+
+begin
+  if Item = nil then Item := FRoot;
+  IntLoad(Item, Stream, self);
+end;
+
+procedure TpcTree.TriggerItemSaveEvent(Item : TpcTreeItem; Stream : TStream);
+{ Triggers the OnItemSave event. This is a virtual method (descendants of this component can override it). }
+begin
+  if (assigned(FOnItemSave)) then
+    FOnItemSave(Self, Item, Stream);
+end; { TriggerItemSaveEvent }
+
+procedure TpcTree.TriggerItemLoadEvent(Item : TpcTreeItem; Stream : TStream);
+{ Triggers the OnItemLoad event. This is a virtual method (descendants of this component can override it). }
+begin
+  if (assigned(FOnItemLoad)) then
+    FOnItemLoad(Self, Item, Stream);
+end; { TriggerItemLoadEvent }
+
+procedure TpcTree.TriggerItemDeleteEvent(Item : TpcTreeItem; Data : pointer);
+{ Triggers the OnItemDelete event. This is a virtual method (descendants of this component can override it). }
+begin
+  if (assigned(FOnItemDelete)) then
+    FOnItemDelete(Self, Item, Data);
+end; { TriggerItemDeleteEvent }
+
+constructor TpcTree.Create; { public }
+begin
+  inherited;
+  New(FRoot);
+  FRoot.Parent := nil;
+  FRoot.Data := nil;
+  FRoot^.List := TpcList.Create;
+end; { Create }
+
+destructor TpcTree.Destroy; { public }
+begin
+  FRoot^.List.Free;
+  Dispose(FRoot);
+  inherited;
+end; { Destroy }
+
+
+{BTREE}
+constructor TBTree.Create(ACaption: String);
+begin
+ froot:=ACaption;
+end;
+
+end.

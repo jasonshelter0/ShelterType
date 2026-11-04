@@ -1,0 +1,230 @@
+Option Explicit
+
+Private DirectX As DirectX7
+Private DirectDraw As DirectDraw7
+Private lakeSurface As DirectDrawSurface7
+Private SpriteSurface As DirectDrawSurface7
+Private ScreenSurface As DirectDrawSurface7
+Private BackBuffer As DirectDrawSurface7
+Private Clipper As DirectDrawClipper
+Private Direct3D As Direct3D7
+Private Device As Direct3DDevice7
+Private ddsdLake As DDSURFACEDESC2
+Private ddsdSprite As DDSURFACEDESC2
+Dim rLake           As RECT
+Dim rSprite         As RECT
+Dim rBackBuffer     As RECT
+Dim lastX As Long
+Dim lastY As Long
+Dim fps As Single
+
+Dim bInit As Boolean, running As Boolean
+
+Private Sub Init()
+   
+    Set DirectX = New DirectX7
+    Dim SurfaceDesc As DDSURFACEDESC2
+   
+    Set DirectDraw = DirectX.DirectDrawCreate("")
+    DirectDraw.SetCooperativeLevel hWnd, DDSCL_NORMAL
+    
+    With SurfaceDesc
+        .lFlags = DDSD_CAPS
+        .ddsCaps.lCaps = DDSCAPS_PRIMARYSURFACE
+    End With
+    
+    Set ScreenSurface = DirectDraw.CreateSurface(SurfaceDesc)
+    
+    With SurfaceDesc
+        .lFlags = DDSD_CAPS Or DDSD_WIDTH Or DDSD_HEIGHT
+        .ddsCaps.lCaps = DDSCAPS_OFFSCREENPLAIN Or DDSCAPS_SYSTEMMEMORY
+        .lWidth = ScaleWidth
+        .lHeight = ScaleHeight
+    End With
+    Set BackBuffer = DirectDraw.CreateSurface(SurfaceDesc)
+    
+    Set Clipper = DirectDraw.CreateClipper(0)
+    Clipper.SetHWnd Me.hWnd
+    ScreenSurface.SetClipper Clipper
+     
+    InitSurfaces
+    rBackBuffer.Bottom = SurfaceDesc.lHeight
+    rBackBuffer.Right = SurfaceDesc.lWidth
+
+    rLake.Bottom = ddsdLake.lHeight
+    rLake.Right = ddsdLake.lWidth
+
+    rSprite.Bottom = ddsdSprite.lHeight
+    rSprite.Right = ddsdSprite.lWidth
+    
+    RepaintEntireBackground
+    
+    running = True
+    Do While running
+        DoFrame
+        DoEvents
+    Loop
+
+End Sub
+
+Sub RepaintEntireBackground()
+    Dim n As Long
+    n = BackBuffer.BltFast(0, 0, lakeSurface, rLake, DDBLTFAST_WAIT)
+End Sub
+
+Sub InitSurfaces()
+    ddsdLake.lFlags = DDSD_CAPS Or DDSD_WIDTH Or DDSD_HEIGHT
+    ddsdLake.ddsCaps.lCaps = DDSCAPS_OFFSCREENPLAIN
+    ddsdLake.lWidth = ScaleWidth
+    ddsdLake.lHeight = ScaleHeight
+    
+    
+    Set lakeSurface = DirectDraw.CreateSurfaceFromFile(App.Path & "\skybox.bmp", ddsdLake)
+                                                                        
+    'copy the background to the compositing surface
+    RepaintEntireBackground
+                                                                        
+    ddsdSprite.lFlags = DDSD_CAPS Or DDSD_WIDTH Or DDSD_HEIGHT
+    ddsdSprite.lWidth = 64
+    ddsdSprite.lHeight = 64
+    ddsdSprite.ddsCaps.lCaps = DDSCAPS_OFFSCREENPLAIN
+    
+    'create the surface
+    Set SpriteSurface = DirectDraw.CreateSurfaceFromFile(App.Path & "\disk1.bmp", ddsdSprite)
+    
+    
+    '----- setting the transparent color of the sprite
+    Dim key As DDCOLORKEY
+    
+    key.low = 0
+    key.high = 0
+    
+    SpriteSurface.SetColorKey DDCKEY_SRCBLT, key
+End Sub
+
+Sub DoFrame()
+    Dim ddrval As Long
+    Dim rPrim As RECT
+    Dim x As Single
+    Dim y As Single
+    
+    Static a As Single
+    Static t1 As Single
+    Static t2 As Single
+    Static i As Integer
+    Static tLast As Single
+    Static tNow As Single
+    
+    t2 = Timer
+    If t1 <> 0 Then
+        a = a + (t2 - t1) * 100
+        If a > 360 Then a = a - 360
+    End If
+    t1 = t2
+    
+    Dim bRestore As Boolean
+    ' this will keep us from trying to blt in case we lose the surfaces (another fullscreen app takes over)
+    bRestore = False
+    Do Until ExModeActive
+        DoEvents
+        bRestore = True
+    Loop
+    
+    ' if we lost and got back the surfaces, then restore them
+    DoEvents
+    If bRestore Then
+        bRestore = False
+        DirectDraw.RestoreAllSurfaces
+        InitSurfaces ' must init the surfaces again if they we're lost
+    End If
+    
+    'calculate FPS
+    i = i + 1
+    If i = 30 Then
+        tNow = Timer
+        If tNow <> tLast Then
+            fps = 30 / (Timer - tLast)
+            tLast = Timer
+            i = 0
+            Me.Caption = "DD Transparency    Frames per Second =" + Format$(fps, "#.0")
+        End If
+    End If
+
+    'calculate the x y coordinate of where we place the sprite
+    x = Cos((a / 360) * 2 * 3.141) * ScaleWidth / 8
+    y = Sin((a / 360) * 2 * 3.141) * ScaleHeight / 8
+    x = x + ScaleWidth / 2
+    y = y + ScaleHeight / 2
+    
+    'clean up background from last frame
+    'by only reparing the background where it needs to
+    'be you wont need to reblit the whole thing
+    Dim rClean As RECT
+    If lastX <> 0 Then
+        rClean.Left = lastX
+        rClean.Top = lastY
+        rClean.Right = lastX + ddsdSprite.lWidth
+        rClean.Bottom = lastY + ddsdSprite.lHeight
+        Call BackBuffer.BltFast(lastX, lastY, lakeSurface, rClean, DDBLTFAST_WAIT)
+    End If
+    
+    lastX = x
+    lastY = y
+    'blt to the backbuffer from our  sprite
+    'use the color key on the source - (our sprite)
+    'wait for the blt to finish before moving one
+    Dim rtemp As RECT
+    rtemp.Left = x
+    rtemp.Top = y
+    rtemp.Right = x + ddsdSprite.lWidth
+    rtemp.Bottom = y + ddsdSprite.lHeight
+    Dim n As Long
+    n = BackBuffer.blt(rtemp, SpriteSurface, rSprite, DDBLT_KEYSRC Or DDBLT_WAIT)
+        
+    'Get the position of our picture box in screen coordinates
+    DirectX.GetWindowRect hWnd, rPrim
+    
+    'blt our back buffer to the screen
+    n = ScreenSurface.blt(rPrim, BackBuffer, rBackBuffer, DDBLT_WAIT)
+
+End Sub
+
+Function ExModeActive() As Boolean
+    Dim TestCoopRes As Long
+    
+    TestCoopRes = DirectDraw.TestCooperativeLevel
+    
+    If (TestCoopRes = DD_OK) Then
+        ExModeActive = True
+    Else
+        ExModeActive = False
+    End If
+    
+End Function
+
+
+Private Sub Form_DblClick()
+    If Me.WindowState = vbMaximized Then Me.WindowState = 0 Else Me.WindowState = 2
+End Sub
+
+Private Sub Form_Load()
+    Me.Show
+    Init
+End Sub
+
+Private Sub Form_Paint()
+    DoFrame
+End Sub
+
+Private Sub Form_Unload(Cancel As Integer)
+    ' Clean up DirectX
+    Set Device = Nothing
+    Set Direct3D = Nothing
+    Set Clipper = Nothing
+    Set BackBuffer = Nothing
+    Set ScreenSurface = Nothing
+    Set DirectDraw = Nothing
+    Set DirectX = Nothing
+    
+    running = False
+End Sub

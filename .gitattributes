@@ -1,0 +1,14 @@
+* text=auto
+*.cs text eol=lf
+*.csproj text eol=lf
+*.xaml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=crlf
+# Legacy course files can contain GBK/UTF-16. Preserve bytes and course fingerprints.
+/Data/** -text
+/Teaching/** -text
+*.png binary
+*.gif binary
+*.jpg binary
+*.bmp binary
