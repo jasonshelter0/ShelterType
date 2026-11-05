@@ -12,6 +12,9 @@ public sealed class DictionaryWindow : Window
     private readonly ListBox results = new();
     private readonly TextBlock details = new() { TextWrapping=TextWrapping.Wrap, FontSize=22 };
     private readonly Image glyph = new() { Height=180, Stretch=System.Windows.Media.Stretch.Uniform };
+    private readonly DictionaryGlyphStore glyphStore = new(Path.Combine(AppContext.BaseDirectory,"Dictionary"));
+    private int glyphRequest;
+    private bool closed;
     private SearchService? search;
     private SearchIndex? index;
     private readonly ComboBox mode = StatsUi.Choice(220);
@@ -76,6 +79,8 @@ public sealed class DictionaryWindow : Window
                 Search(); query.Focus(); query.SelectAll();
             } catch(Exception e) when(e is IOException or UnauthorizedAccessException) { details.Text=e.Message; }
         };
+        Closed+=(_,_)=>{closed=true;glyphRequest++; _=Task.Run(()=>glyphStore.Dispose());};
+        Activated+=(_,_)=>ShowEntry();
         PreviewKeyDown+=(_,e)=>{if(e.Key==System.Windows.Input.Key.Escape)Close();};
     }
     private void Search()
@@ -96,8 +101,9 @@ public sealed class DictionaryWindow : Window
         results.SelectedIndex=results.Items.Count>0?0:-1;
         ShowEntry();
     }
-    private void ShowEntry()
+    private async void ShowEntry()
     {
+        int request = ++glyphRequest;
         glyph.Source=null;
         if(glyph.Parent is Border) ((Border)glyph.Parent).Visibility=Visibility.Collapsed;
         if(results.SelectedItem is not SearchResult entry) {
@@ -105,16 +111,18 @@ public sealed class DictionaryWindow : Window
         }
         details.Text=entry.DisplayText+"    "+(entry.WubiCode??string.Join("  ",entry.WubiCodes??Array.Empty<string>()))+"\n"+string.Join(" / ",entry.Pinyins??Array.Empty<string>());
         if(entry.GlyphKey is not { Length:1 } key)return;
-        var path=Path.Combine(AppContext.BaseDirectory,"Dictionary","Glyphs",key+".png");
-        if(!File.Exists(path))return;
-        try { var image=new BitmapImage(); image.BeginInit(); image.CacheOption=BitmapCacheOption.OnLoad; image.UriSource=new Uri(path); image.EndInit(); image.Freeze(); glyph.Source=image; if(glyph.Parent is Border loadedFrame)loadedFrame.Visibility=Visibility.Visible; }
-        catch(Exception e) when(e is IOException or NotSupportedException or System.IO.FileFormatException) { glyph.Source=null;
-        if(glyph.Parent is Border) ((Border)glyph.Parent).Visibility=Visibility.Collapsed; }
+        var bg = (TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color ?? System.Windows.Media.Colors.White;
+        var fg = (TryFindResource("Ink") as System.Windows.Media.SolidColorBrush)?.Color ?? System.Windows.Media.Colors.Black;
+        bool dark = bg.R + bg.G + bg.B < 384;
+        if(glyph.Parent is Border frame)frame.Background=new System.Windows.Media.SolidColorBrush(dark?bg:System.Windows.Media.Colors.White);
+        try {
+            var image=await Task.Run(()=>glyphStore.Load(key,bg,fg,dark));
+            if(closed || request!=glyphRequest)return;
+            glyph.Source=image;
+            if(glyph.Parent is Border loadedFrame)loadedFrame.Visibility=image is null?Visibility.Collapsed:Visibility.Visible;
+        }
+        catch(Exception e) when(e is IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException or System.IO.FileFormatException) {
+            if(!closed && request==glyphRequest)glyph.Source=null;
+        }
     }
 }
-
-
-
-
-
-

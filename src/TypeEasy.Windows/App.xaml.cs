@@ -17,5 +17,6 @@ public partial class App : Application
         base.OnStartup(e);
         MainWindow = new MainWindow();
         MainWindow.Show();
+        _ = Task.Run(() => DictionaryMigration.CleanLegacy(AppContext.BaseDirectory));
     }
 }

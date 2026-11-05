@@ -1,25 +1,22 @@
-# ShelterType 1.0.0
+# ShelterType 1.1.0
 
-ShelterType 1.0.0 使用新的 Shelter 双三角形 S 与键帽标志，统一程序图标、主界面、关于页和项目 README。软件内标志使用原生矢量绘制，随深浅主题切换；独立 Shelter 品牌素材保存在 Branding 目录。
+词典图片改为单包读取，减少解压与更新时处理的小文件；暗色模式下字形图片使用应用底色和浅色笔画。
 
-## 本次更新
-
-- 集成五笔词典、86/98 字根表，支持点击和按字母查字根。课程与测速中按 F2 查词，测速计时继续。
-- 五笔课程支持中文输入法，保留对应英文击键提示。字根识记按当前目标显示字根；字根键盘按五区及 Z 配色，折区包含 N。
-- 适用课程支持乱序复习；已完成课程可重新练习，完成后优先进入下一门未完成课程。
-- 限时测速支持随机文章与 Enter 开始，增加公共领域中英文文章。
-- 修复长篇英文和中文输入与原文不对齐、空格高亮引起文字跳动、输入字符显示及结果文字布局问题；中文目标不再以下划线造成字形混淆。
-- 保留课程进度圆环、个人错键生成的专属练习、语境混淆键盘联动、每日与文章热力图以及三语界面。
-- 为课程素材记录来源，支持构建时排除金山资源；本次完整包仍保留已获许可的原版资料与致谢。
+- 6,763 张词典图片集中存放于 Dictionary/Glyphs.zip，查询时只读取选中的图片，不在磁盘展开。文字匹配不等待图片；近期图片有容量受限的内存缓存。
+- 图片后台读取与主题转换，快速切换时忽略旧请求。压缩数据先读入独立内存后再解码。
+- 亮色模式保留白底黑字；暗色模式将背景映射为当前应用底色，保留笔画边缘的灰度过渡。
+- 支持资源校验后选择较小更新包：词典资源完全相同时不再下载该资源；资源缺失、损坏或改变时使用完整包。
+- 更新安装会跳过字节完全相同的文件，减少备份与写入；小包安装前再次核对保留的资源，校验失败不替换程序。
+- 首次运行新版本时，在后台核对并清理与新资源包一致的旧散装图片。修改过的图片和未知文件保留，UserData 不受影响。
 
 ## 下载与更新
 
-Windows 10/11 x64：下载 **ShelterType-win-x64.zip**，完整解压到可写目录，运行 **ShelterType.exe**。包内自带运行环境，无需安装 .NET。
+首次下载请选择 **ShelterType-win-x64.zip**，完整解压后运行 ShelterType.exe。
 
-现有用户可在 **设置 → 检查更新** 下载并更新。自动更新保留 UserData 中的练习记录；五笔中文输入课程会迁移已完成项目的位置，旧击键记录仍保留。五笔课程中未完成的单个项目从该项目开头继续。
+从 1.0.0 升级仍下载一次完整兼容包。安装 1.1.0 后，后续版本可按资源校验值自动使用名称含 `code` 的较小包；它供更新器使用，不是独立安装包。源码与原始图片继续保留，方便维护。
 
-发布资产包括 ZIP 与 SHA-256 校验文件。程序仍为便携版，不安装后台服务。感谢原作者与资料贡献者，详见 ACKNOWLEDGEMENTS.md 和 THIRD-PARTY-NOTICES.md。
+未增加第三方运行框架、服务或浏览器组件。应用、词典和练习均可离线使用。
 
 ## English
 
-ShelterType 1.0.0 introduces the Shelter S/keycap identity, theme-aware native vector branding, an integrated Wubi dictionary available with F2 during lessons and speed tests, shuffled practice, random test articles, Chinese IME support in Wubi courses, and input alignment fixes. Existing users can update from Settings; personal records are retained. Download and extract the Windows x64 ZIP, then run ShelterType.exe.
+Dictionary glyphs are now read on demand from one indexed ZIP, with background decoding and a bounded cache. Dark mode uses the application background and light strokes. New clients reuse byte-identical dictionary resources and select a smaller update package; missing or changed resources fall back to the full package. Legacy clients still receive a complete compatible ZIP. Existing personal records are preserved.

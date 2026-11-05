@@ -2,6 +2,12 @@ param([Parameter(Mandatory=$true)][string]$JobPath)
 # This installer is embedded in the installed application, never downloaded as executable script.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+function Get-ContentHash([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') }
+    finally { $stream.Dispose(); $sha.Dispose() }
+}
 $job = $null
 $archive = $null
 $packageStream = $null
@@ -167,6 +173,26 @@ try {
     [System.IO.Directory]::CreateDirectory($profileDirectory) | Out-Null
     Assert-NoLinks (Join-Path $profileDirectory 'session.lock')
     $profileLock = [System.IO.File]::Open((Join-Path $profileDirectory 'session.lock'),[System.IO.FileMode]::OpenOrCreate,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None)
+    # Code-only updates must retain exactly the resource pack they were built for.
+    $resourceManifest = Join-Path $stage 'required-resources.json'
+    if ([IO.File]::Exists($resourceManifest)) {
+        $resource = Get-Content -LiteralPath $resourceManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+        $expectedResource = [string]$resource.GlyphsSha256
+        if ($expectedResource -cnotmatch '^[a-f0-9]{64}$') { throw 'Invalid resource checksum.' }
+        $resourcePath = Join-Path $stage 'Dictionary\Glyphs.zip'
+        if (![IO.File]::Exists($resourcePath)) { $resourcePath = Join-Path $install 'Dictionary\Glyphs.zip' }
+        Assert-NoLinks $resourcePath
+        if (![IO.File]::Exists($resourcePath) -or (Get-ContentHash $resourcePath) -ne $expectedResource) { throw 'Required dictionary resource is missing or changed. Download the full package.' }
+    }
+    # Do not back up or rewrite byte-identical installed files (including the dictionary pack).
+    $changedFiles = [System.Collections.Generic.List[object]]::new()
+    foreach ($file in $files) {
+        Assert-NoLinks $file.Target
+        $stagedFile = Get-ChildPath $stage $file.Name
+        if ([IO.File]::Exists($file.Target) -and (Get-Item -LiteralPath $file.Target).Length -eq (Get-Item -LiteralPath $stagedFile).Length -and (Get-ContentHash $file.Target) -eq (Get-ContentHash $stagedFile)) { continue }
+        $changedFiles.Add($file)
+    }
+    $files = $changedFiles
     # Back up everything before beginning the commit. Keep backups for recovery after unexpected power loss.
     foreach ($file in $files) {
         Assert-NoLinks $file.Target

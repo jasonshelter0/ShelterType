@@ -9,7 +9,11 @@ using System.Text.RegularExpressions;
 namespace ShelterType.Update;
 
 public sealed record ReleaseUpdate(Version Version, string Tag, string ReleaseUrl, string Notes,
-    Uri PackageUrl, Uri ChecksumUrl, long PackageSize);
+    Uri PackageUrl, Uri ChecksumUrl, long PackageSize)
+{
+    public CodeUpdate? Code { get; init; }
+}
+public sealed record CodeUpdate(string Name, string ResourceHash, Uri PackageUrl, Uri ChecksumUrl, long Size);
 public sealed record DownloadProgress(long BytesReceived, long TotalBytes)
 {
     public double Fraction => TotalBytes <= 0 ? 0 : Math.Clamp((double)BytesReceived / TotalBytes, 0, 1);
@@ -86,16 +90,29 @@ public sealed class UpdateClient : IDisposable
         if (zip is null || checksum is null || size <= 0 || size > MaximumPackageBytes)
             throw new InvalidDataException("This release has no complete, compatible Windows update package.");
         var notes = root.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String ? body.GetString() ?? "" : "";
-        return new(version, tag, $"https://github.com/{Repository}/releases/tag/{tag}", notes, zip, checksum, size);
+        return new(version, tag, $"https://github.com/{Repository}/releases/tag/{tag}", notes, zip, checksum, size) { Code = ParseCode(root, expectedUrl) };
     }
 
     public async Task<PreparedUpdate> DownloadAsync(ReleaseUpdate release, string cacheRoot,
-        IProgress<DownloadProgress>? progress = null, CancellationToken cancellationToken = default)
+        IProgress<DownloadProgress>? progress = null, CancellationToken cancellationToken = default, string? installDirectory = null)
+    {
+        var name = PackageName;
+        if (installDirectory is not null && release.Code is { } code && await CanReuseResourceAsync(installDirectory, code.ResourceHash, cancellationToken).ConfigureAwait(false))
+        {
+            if (code.Name != "ShelterType-code-" + code.ResourceHash + "-win-x64.zip") throw new InvalidDataException("Invalid code package name.");
+            name = code.Name;
+            release = release with { PackageUrl = code.PackageUrl, ChecksumUrl = code.ChecksumUrl, PackageSize = code.Size };
+        }
+        return await DownloadPackageAsync(release, cacheRoot, name, progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PreparedUpdate> DownloadPackageAsync(ReleaseUpdate release, string cacheRoot, string name,
+        IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
     {
         // Validate even when the caller constructs a ReleaseUpdate instead of using CheckAsync.
         var prefix = $"https://github.com/{Repository}/releases/download/{release.Tag}/";
-        if (ParseStableVersion(release.Tag) != release.Version || release.PackageUrl.AbsoluteUri != prefix + PackageName ||
-            release.ChecksumUrl.AbsoluteUri != prefix + PackageName + ".sha256" ||
+        if (ParseStableVersion(release.Tag) != release.Version || release.PackageUrl.AbsoluteUri != prefix + name ||
+            release.ChecksumUrl.AbsoluteUri != prefix + name + ".sha256" ||
             release.PackageSize <= 0 || release.PackageSize > MaximumPackageBytes)
             throw new InvalidDataException("Invalid update metadata.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -104,7 +121,7 @@ public sealed class UpdateClient : IDisposable
         using var hashResponse = await GetAsync(release.ChecksumUrl, token).ConfigureAwait(false);
         hashResponse.EnsureSuccessStatusCode();
         var hashBytes = await ReadLimitedAsync(hashResponse, 4096, token).ConfigureAwait(false);
-        var expectedHash = ParseChecksum(System.Text.Encoding.UTF8.GetString(hashBytes));
+        var expectedHash = ParseChecksum(System.Text.Encoding.UTF8.GetString(hashBytes), name);
         var directory = Path.Combine(Path.GetFullPath(cacheRoot), "update-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
@@ -144,11 +161,44 @@ public sealed class UpdateClient : IDisposable
         }
     }
 
-    public static string ParseChecksum(string text)
+    private static CodeUpdate? ParseCode(JsonElement root, string prefix)
+    {
+        var assets = root.GetProperty("assets").EnumerateArray().ToArray();
+        foreach(var asset in assets)
+        {
+            var name=asset.GetProperty("name").GetString() ?? "";
+            var match=Regex.Match(name,@"^ShelterType-code-([a-f0-9]{64})-win-x64\.zip$");
+            if(!match.Success)continue;
+            var hashes=assets.Where(a=>a.GetProperty("name").GetString()==name+".sha256").ToArray();
+            if(hashes.Length!=1)continue;
+            var hash=hashes[0];
+            bool Ready(JsonElement a)=>!a.TryGetProperty("state",out var state)||state.GetString()=="uploaded";
+            if(!Ready(asset)||!Ready(hash)||asset.GetProperty("browser_download_url").GetString()!=prefix+name||hash.GetProperty("browser_download_url").GetString()!=prefix+name+".sha256")continue;
+            var size=asset.GetProperty("size").GetInt64();
+            if(size<=0||size>MaximumPackageBytes)continue;
+            return new(name,match.Groups[1].Value,new Uri(prefix+name),new Uri(prefix+name+".sha256"),size);
+        }
+        return null;
+    }
+
+    public static async Task<bool> CanReuseResourceAsync(string directory, string expectedHash, CancellationToken token = default)
+    {
+        if(!Regex.IsMatch(expectedHash,"^[a-f0-9]{64}$"))return false;
+        try {
+            var path=Path.Combine(directory,"Dictionary","Glyphs.zip");
+            if(!File.Exists(path))return false;
+            UpdateInstaller.RejectReparseAncestors(Path.GetDirectoryName(path)!);
+            if((File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)return false;
+            await VerifyChecksumAsync(path,expectedHash,token).ConfigureAwait(false);
+            return true;
+        } catch(Exception e) when(e is IOException or InvalidDataException or UnauthorizedAccessException) {return false;}
+    }
+
+    public static string ParseChecksum(string text, string name = PackageName)
     {
         var lines = text.Trim('\uFEFF', ' ', '\r', '\n', '\t').Split('\n');
         if (lines.Length != 1) throw new InvalidDataException("Expected one SHA-256 checksum.");
-        var match = Regex.Match(lines[0].Trim(), @"^([a-fA-F0-9]{64})(?:\s+\*?ShelterType-win-x64\.zip)?$", RegexOptions.CultureInvariant);
+        var match = Regex.Match(lines[0].Trim(), "^([a-fA-F0-9]{64})(?:\\s+\\*?" + Regex.Escape(name) + ")?$", RegexOptions.CultureInvariant);
         if (!match.Success) throw new InvalidDataException("Invalid SHA-256 checksum file.");
         return match.Groups[1].Value.ToUpperInvariant();
     }

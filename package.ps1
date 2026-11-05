@@ -32,13 +32,33 @@ function Copy-ReviewedAssets([string]$Name) {
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Linked course asset is not allowed: $($item.FullName)" }
         if ($item.Name -in @('UserData', 'TestData', '.git', '.env', 'hosts.yml', 'preferences.json', 'session.lock')) { throw "Unexpected private asset: $($item.FullName)" }
     }
+    New-Item -ItemType Directory -Path (Split-Path -Parent (Join-Path $staging $Name)) -Force | Out-Null
     Copy-Item -LiteralPath $source -Destination (Join-Path $staging $Name) -Recurse
 }
 if (!$ExcludeKingsoft) {
     Copy-ReviewedAssets 'Data'
     Copy-ReviewedAssets 'Teaching'
 }
-Copy-ReviewedAssets 'Dictionary'
+Copy-ReviewedAssets 'Dictionary/Data'
+# Stable entry ordering and timestamps make the resource hash independent of build time.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$glyphSource = Join-Path $PSScriptRoot 'Dictionary/Glyphs'
+$glyphPack = Join-Path $staging 'Dictionary/Glyphs.zip'
+$pack = [IO.Compression.ZipFile]::Open($glyphPack, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    $glyphFiles = [IO.Directory]::GetFiles($glyphSource)
+    [Array]::Sort($glyphFiles,[StringComparer]::Ordinal)
+    foreach ($glyphFile in $glyphFiles) {
+        $file = Get-Item -LiteralPath $glyphFile
+        if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint -or $file.Name -notmatch '^.\.png$') { throw 'Invalid glyph source.' }
+        $entry = $pack.CreateEntry($file.Name, [IO.Compression.CompressionLevel]::Optimal)
+        $entry.LastWriteTime = [DateTimeOffset]::new(2000,1,1,0,0,0,[TimeSpan]::Zero)
+        $input = $file.OpenRead(); $output = $entry.Open()
+        try { $input.CopyTo($output) } finally { $input.Dispose(); $output.Dispose() }
+    }
+} finally { $pack.Dispose() }
+$resourceHash = (Get-FileHash -LiteralPath $glyphPack -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText((Join-Path $staging 'required-resources.json'), ('{"GlyphsSha256":"' + $resourceHash + '"}'))
 Copy-ReviewedAssets 'Courses'
 Copy-ReviewedAssets 'Branding'
 foreach ($name in @('README.md', 'ACKNOWLEDGEMENTS.md', 'THIRD-PARTY-NOTICES.md', '使用与测试.txt')) {
@@ -58,3 +78,18 @@ Write-Host "Version: $version"
 Write-Host "Package: $archive"
 Write-Host "SHA256:  $digest"
 Write-Host "Built app for testing: $staging"
+
+# A second package retains the installed dictionary pack. Old clients still use the full ZIP.
+$codeName = 'ShelterType-code-' + $resourceHash + '-win-x64.zip'
+$codeArchive = Join-Path $OutputDirectory $codeName
+$codeZip = [IO.Compression.ZipFile]::Open($codeArchive, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($file in Get-ChildItem -LiteralPath $staging -File -Recurse) {
+        if ($file.FullName -eq $glyphPack) { continue }
+        $relative = [IO.Path]::GetRelativePath($staging, $file.FullName).Replace('\','/')
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($codeZip,$file.FullName,$relative,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+} finally { $codeZip.Dispose() }
+$codeHash = (Get-FileHash -LiteralPath $codeArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText(($codeArchive+'.sha256'),$codeHash+'  '+$codeName+[Environment]::NewLine,[Text.UTF8Encoding]::new($false))
+Write-Host "Code-only update: $codeArchive"

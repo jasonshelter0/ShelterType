@@ -31,7 +31,7 @@ jobs:
         with:
           name: ShelterType-win-x64
           path: |
-            artifacts/releases/*/ShelterType-win-x64.zip
-            artifacts/releases/*/ShelterType-win-x64.zip.sha256
+            artifacts/releases/*/ShelterType-*.zip
+            artifacts/releases/*/ShelterType-*.zip.sha256
           if-no-files-found: error
           retention-days: 14

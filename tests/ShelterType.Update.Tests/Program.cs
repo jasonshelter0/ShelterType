@@ -106,6 +106,34 @@ internal static class Program
             using var canceled = new CancellationTokenSource(); canceled.Cancel();
             await RejectAsync(() => client.DownloadAsync(release!, Path.Combine(root, "cache"), cancellationToken: canceled.Token), "cancelled download");
         }
+        var resourceDirectory=Path.Combine(root,"resource-reuse");Directory.CreateDirectory(Path.Combine(resourceDirectory,"Dictionary"));
+        var resourcePath=Path.Combine(resourceDirectory,"Dictionary","Glyphs.zip");
+        var resourceBytes=Encoding.UTF8.GetBytes("stable dictionary bytes");
+        var resourceHash=Convert.ToHexString(SHA256.HashData(resourceBytes)).ToLowerInvariant();
+        Check(!await UpdateClient.CanReuseResourceAsync(resourceDirectory,resourceHash),"missing resource uses full update");
+        File.WriteAllBytes(resourcePath,resourceBytes);
+        Check(await UpdateClient.CanReuseResourceAsync(resourceDirectory,resourceHash),"identical resource reused");
+        Check(!await UpdateClient.CanReuseResourceAsync(resourceDirectory,new string('0',64)),"modified resource uses full update");
+        var codeName="ShelterType-code-"+resourceHash+"-win-x64.zip";
+        var full=UpdateClient.ParseRelease(Release(zip),new Version(0,7,0))!;
+        var prefix="https://github.com/"+UpdateClient.Repository+"/releases/download/v0.8.0/";
+        var metadata=System.Text.Json.Nodes.JsonNode.Parse(Release(zip))!;
+        var assets=(System.Text.Json.Nodes.JsonArray)metadata["assets"]!;
+        assets.Add(System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new {name=codeName,browser_download_url=prefix+codeName,size=zip.Length,state="uploaded"})));
+        assets.Add(System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new {name=codeName+".sha256",browser_download_url=prefix+codeName+".sha256",size=160,state="uploaded"})));
+        Check(UpdateClient.ParseRelease(Encoding.UTF8.GetBytes(metadata.ToJsonString()),new Version(0,7,0))?.Code?.ResourceHash==resourceHash,"discover compatible code asset");
+        assets[2]!["browser_download_url"]="https://evil.example/update.zip";
+        Check(UpdateClient.ParseRelease(Encoding.UTF8.GetBytes(metadata.ToJsonString()),new Version(0,7,0))?.Code is null,"ignore untrusted optional asset");
+        var withCode=full with {Code=new CodeUpdate(codeName,resourceHash,new Uri(prefix+codeName),new Uri(prefix+codeName+".sha256"),zip.Length)};
+        var handler=new ResourceHandler(zip,codeName);
+        using(var resourceClient=new UpdateClient(handler)){
+            await resourceClient.DownloadAsync(withCode,Path.Combine(root,"cache"),installDirectory:resourceDirectory);
+            Check(handler.Requests.Any(x=>x.EndsWith(codeName)),"unchanged resource downloads code only");
+            Check(!handler.Requests.Any(x=>x.EndsWith(UpdateClient.PackageName)),"full archive never requested on reuse");
+            File.WriteAllText(resourcePath,"changed");handler.Requests.Clear();
+            await resourceClient.DownloadAsync(withCode,Path.Combine(root,"cache"),installDirectory:resourceDirectory);
+            Check(handler.Requests.Any(x=>x.EndsWith(UpdateClient.PackageName)),"resource mismatch downloads full archive");
+        }
         if (OperatingSystem.IsWindows()) await InstallerChecks(zip);
     }
 
@@ -129,6 +157,9 @@ internal static class Program
                     File.WriteAllText(Path.Combine(oldFolder, "install-job.json"), JsonSerializer.Serialize(new { InstallDirectory = old.Item3 }));
                     Directory.CreateDirectory(Path.Combine(oldFolder, "backup")); File.WriteAllText(Path.Combine(oldFolder, "backup", "previous.dll"), "old backup");
                 }
+            }
+            if(scenario is "resource-retained" or "resource-identical"){
+                Directory.CreateDirectory(Path.Combine(install,"Dictionary"));File.WriteAllText(Path.Combine(install,"Dictionary/Glyphs.zip"),"pack");
             }
             var packagePath = WriteZip(package, cache);
             var script = Path.Combine(cache, "InstallUpdate.ps1"); UpdateInstaller.WriteInstallerScript(script);
@@ -161,6 +192,15 @@ internal static class Program
             if (scenario == "junction") Check(File.ReadAllText(Path.Combine(directory, "outside", "keyboard.png")) == "outside untouched", "junction destination untouched");
             return (install, cache, process.ExitCode);
         }
+        var resourceHash=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("pack"))).ToLowerInvariant();
+        var missingResource=await Run(Zip(("required-resources.json",JsonSerializer.Serialize(new {GlyphsSha256=resourceHash}))),"missing-resource");
+        Check(missingResource.ExitCode!=0 && File.ReadAllText(Path.Combine(missingResource.Install,"ShelterType.exe"))=="old exe","missing retained pack fails before replacing program");
+        var packed=await Run(Zip(("required-resources.json",JsonSerializer.Serialize(new {GlyphsSha256=resourceHash})),("Dictionary/Glyphs.zip","pack")),"resource-full");
+        Check(packed.ExitCode==0,"full package validates new resource");
+        var retained=await Run(Zip(("required-resources.json",JsonSerializer.Serialize(new {GlyphsSha256=resourceHash}))),"resource-retained");
+        Check(retained.ExitCode==0 && File.ReadAllText(Path.Combine(retained.Install,"Dictionary/Glyphs.zip"))=="pack","code-only install retains validated pack");
+        var identical=await Run(Zip(("required-resources.json",JsonSerializer.Serialize(new {GlyphsSha256=resourceHash})),("Dictionary/Glyphs.zip","pack")),"resource-identical");
+        Check(identical.ExitCode==0 && !Directory.GetFiles(identical.Cache,"Glyphs.zip",SearchOption.AllDirectories).Any(),"identical resource not copied into backup");
         var success = await Run(zip, "success");
         Check(success.ExitCode == 0, "installer success: " + File.ReadAllText(Path.Combine(success.Cache, "result.json")));
         Check(File.ReadAllText(Path.Combine(success.Install, "ShelterType.exe")) == "new exe", "program replaced");
@@ -203,6 +243,16 @@ internal static class Program
             }
             else response = new(HttpStatusCode.OK) { Content = new ByteArrayContent(behavior == "short" ? zip[..^1] : behavior == "long" ? zip.Concat(new byte[] { 0 }).ToArray() : zip) };
             return Task.FromResult(response);
+        }
+    }
+    private sealed class ResourceHandler(byte[] zip,string codeName) : HttpMessageHandler
+    {
+        public List<string> Requests {get;}=new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
+            var url=request.RequestUri!.AbsoluteUri;Requests.Add(url);
+            var name=url.EndsWith(codeName+".sha256")?codeName:UpdateClient.PackageName;
+            byte[] bytes=url.EndsWith(".sha256")?Encoding.UTF8.GetBytes(Convert.ToHexString(SHA256.HashData(zip))+"  "+name):zip;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new ByteArrayContent(bytes)});
         }
     }
 }

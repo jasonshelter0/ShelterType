@@ -89,7 +89,7 @@ public sealed class UpdateWindow : Window
                 status.Text = UiText.Format("正在下载 {0:P0}", "Downloading {0:P0}", "Téléchargement : {0:P0}", p.Fraction);
             });
             var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ShelterType", "Updates");
-            var prepared = await client.DownloadAsync(release, cache, report, token);
+            var prepared = await client.DownloadAsync(release, cache, report, token, AppContext.BaseDirectory);
             token.ThrowIfCancellationRequested();
             if (closed) return;
             status.Text = UiText.T("正在保存并重新启动…", "Saving and restarting…", "Enregistrement et redémarrage…");
