@@ -2,7 +2,7 @@ using System.Windows;
 namespace TypeEasy.Windows;
 public partial class App : Application
 {
-    static App()
+    public App()
     {
         var icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/ShelterType;component/Assets/ShelterType.ico"));
         icon.Freeze();
