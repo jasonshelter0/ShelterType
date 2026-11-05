@@ -48,8 +48,6 @@ GitHub 自动为标签提供源码 ZIP/TAR.GZ。程序检查 `releases/latest`�
 
 后续如改变文件结构、运行时、更新协议或数据格式，应先验证从最近正式版本升级，再发布新版本。
 
-## 1.1.0 资源复用协议
+## 1.2.0 完整包发布
 
-package.ps1 同时生成完整 ZIP 和 ShelterType-code-<词典包 SHA256>-win-x64.zip，各有对应校验文件。发布时上传四个资产。完整包继续使用旧固定名称，保障 1.0.0 及更早版本升级。code 包仅省略 Dictionary/Glyphs.zip，包含 required-resources.json；安装器在替换前验证保留资源，失败则不修改应用。词典源图片仍保留在源码目录，打包采用固定时间戳和 Ordinal 顺序。
-
-不要单独把 code 包作为首次下载安装包。用户应下载完整包；1.1.0 及后续客户端自动选择合适资产。资源改变时回退到完整包，不进行逐字节差分。
+只上传 ShelterType-win-x64.zip 和同名 .sha256 校验文件。package.ps1 不再生成 code 更新包；客户端在没有 code 附件时使用完整包。保留 required-resources.json 与安装前校验，以及相同文件跳过写入的逻辑。

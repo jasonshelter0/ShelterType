@@ -16,7 +16,7 @@ public sealed class KeyboardStatisticsPanel : StackPanel
     private readonly ComboBox metric=StatsUi.Choice(190),scope=StatsUi.Choice(190);
     private readonly TextBlock legend=StatsUi.Text("",11,"Muted"),selection=StatsUi.Text("",15),selectionNote=StatsUi.Text("",11,"Muted");
     private readonly TextBlock filterLabel=StatsUi.Text("",12,"Muted"),rowCount=StatsUi.Text("",11,"Muted"),contextDetail=StatsUi.Text("",12,"Muted");
-    private readonly ListBox paths=new(){MaxHeight=265,MinHeight=74,Margin=new Thickness(0,7,0,6)};
+    private readonly ListView paths=new(){Height=285,Margin=new Thickness(0,7,0,6)};
     private readonly Button clearFilter,previous,next;
     private readonly StackPanel unmappedPanel=new();
     private readonly TextBox search=new(){MinWidth=150};
@@ -29,11 +29,18 @@ public sealed class KeyboardStatisticsPanel : StackPanel
     private string rowView="";
     private int page;
     private KeyboardMetric SelectedMetric=>(KeyboardMetric)Math.Max(0,metric.SelectedIndex);
-    private sealed record PathRow(KeyboardErrorPath Path,string Text);
-
-    public KeyboardStatisticsPanel(AnalyticsStore store,string? mode)
+    private sealed record PathRow(KeyboardErrorPath Path,string Text)
     {
-        var keys=store.ReadKeys();var confusions=store.ReadConfusions();var contexts=store.ReadContextRisks();
+        public string Expected=>CharacterLabel(Path.Expected);
+        public string Actual=>CharacterLabel(Path.Actual);
+        public long Count=>Path.Count;
+        public string Category=>UiText.Mode(Path.Mode);
+        public string Context=>Path.Context is {} c?UiText.Key(c.Before)+"〔"+UiText.Key(c.Expected)+"〕"+UiText.Key(c.After):"—";
+    }
+
+    public KeyboardStatisticsPanel(AnalyticsStore store,string? mode):this(store.ReadKeys(),store.ReadConfusions(),store.ReadContextRisks(),mode) { }
+    public KeyboardStatisticsPanel(IReadOnlyList<TypingKeySummary> keys,IReadOnlyList<TypingConfusion> confusions,IReadOnlyList<ContextRisk> contexts,string? mode)
+    {
         data=KeyboardStatistics.Build(keys,confusions,contexts,mode);
         contextualPaths=KeyboardStatistics.ContextPaths(contexts,mode);aggregatePaths=KeyboardStatistics.AggregatePaths(confusions,mode);
         var header=new DockPanel();DockPanel.SetDock(metric,Dock.Right);header.Children.Add(metric);
@@ -51,7 +58,14 @@ public sealed class KeyboardStatisticsPanel : StackPanel
         var rowText=new FrameworkElementFactory(typeof(TextBlock));rowText.SetBinding(TextBlock.TextProperty,new Binding(nameof(PathRow.Text)));
         rowText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);rowText.SetValue(TextBlock.FontSizeProperty,12.0);
         rowText.SetValue(TextBlock.ForegroundProperty,new DynamicResourceExtension("Ink"));
-        paths.ItemTemplate=new DataTemplate{VisualTree=rowText};
+        var columns=new GridView();
+        void Column(string label,string property,double width)=>columns.Columns.Add(new GridViewColumn{Header=label,DisplayMemberBinding=new Binding(property),Width=width});
+        Column(UiText.T("应输入","Expected","Attendu"),nameof(PathRow.Expected),90);
+        Column(UiText.T("误输入","Entered","Saisi"),nameof(PathRow.Actual),90);
+        Column(UiText.T("次数","Count","Nombre"),nameof(PathRow.Count),70);
+        Column(UiText.T("原文语境","Source context","Contexte"),nameof(PathRow.Context),250);
+        Column(UiText.T("类别","Category","Catégorie"),nameof(PathRow.Category),170);
+        paths.View=columns;paths.SetResourceReference(Control.BackgroundProperty,"Panel");paths.SetResourceReference(Control.ForegroundProperty,"Ink");paths.BorderThickness=new Thickness(0);
         VirtualizingPanel.SetIsVirtualizing(paths,true);VirtualizingPanel.SetVirtualizationMode(paths,VirtualizationMode.Recycling);
         ScrollViewer.SetCanContentScroll(paths,true);ScrollViewer.SetVerticalScrollBarVisibility(paths,ScrollBarVisibility.Auto);
         System.Windows.Automation.AutomationProperties.SetName(paths,UiText.T("可选择的错键记录","Selectable mistake records","Erreurs sélectionnables"));

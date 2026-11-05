@@ -32,6 +32,21 @@ internal static class StatsUi
         TextOptions.SetTextFormattingMode(t,TextFormattingMode.Display);
         t.SetResourceReference(TextBlock.ForegroundProperty,color);return t;
     }
+    public static void ThemeTable(DataGrid grid)
+    {
+        grid.SetResourceReference(Control.BackgroundProperty,"Panel");grid.SetResourceReference(Control.ForegroundProperty,"Ink");
+        grid.SetResourceReference(DataGrid.RowBackgroundProperty,"Panel");grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty,"Field");
+        grid.GridLinesVisibility=DataGridGridLinesVisibility.None;grid.BorderThickness=new Thickness(0);grid.AlternationCount=2;
+        var header=new Style(typeof(System.Windows.Controls.Primitives.DataGridColumnHeader));
+        header.Setters.Add(new Setter(Control.BackgroundProperty,new DynamicResourceExtension("Field")));header.Setters.Add(new Setter(Control.ForegroundProperty,new DynamicResourceExtension("Muted")));header.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(10,9,10,9)));header.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));grid.ColumnHeaderStyle=header;
+        var cell=new Style(typeof(DataGridCell));cell.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(8,5,8,5)));cell.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));grid.CellStyle=cell;
+    }
+    public static Button IconButton(AppIconKind kind,string label,RoutedEventHandler click)
+    {
+        var button=new Button{Content=new AppIcon{Kind=kind},ToolTip=label,Margin=new Thickness(0,0,8,0)};
+        button.SetResourceReference(FrameworkElement.StyleProperty,"ToolbarIconButton");
+        System.Windows.Automation.AutomationProperties.SetName(button,label);button.Click+=click;return button;
+    }
     public static Button Button(string text,RoutedEventHandler click)
     {var b=new Button{Content=text,Margin=new Thickness(0,0,8,0)};b.Click+=click;return b;}
     public static Border Card(UIElement child,Thickness? margin=null)

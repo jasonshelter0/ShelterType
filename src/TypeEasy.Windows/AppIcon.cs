@@ -13,7 +13,12 @@ public enum AppIconKind
     SidebarClosed,
     Focus,
     ExitFocus,
-    Info
+    Info,
+    Dictionary,
+    Shuffle,
+    Articles,
+    Ai,
+    Update
 }
 
 /// <summary>
@@ -76,6 +81,16 @@ public sealed class AppIcon : FrameworkElement
         drawing.PushTransform(new ScaleTransform(size / 24, size / 24));
         switch (Kind)
         {
+            case AppIconKind.Dictionary:
+                drawing.DrawGeometry(null,pen,Shape("M12,5 C8,2 4,3 2,4 V20 C6,18 9,18 12,21 C15,18 18,18 22,20 V4 C18,2 15,3 12,5 V21"));break;
+            case AppIconKind.Shuffle:
+                drawing.DrawGeometry(null,pen,Shape("M3,6 H6 C12,6 12,18 18,18 H21 M18,15 L21,18 18,21 M3,18 H6 C12,18 12,6 18,6 H21 M18,3 L21,6 18,9"));break;
+            case AppIconKind.Articles:
+                drawing.DrawGeometry(null,pen,Shape("M5,2 H16 L21,7 V22 H5 Z M9,10 H17 M9,14 H17 M9,18 H15"));break;
+            case AppIconKind.Update:
+                drawing.DrawGeometry(null,pen,Geometry.Parse("M12,3 L12,15 M7,10 L12,15 L17,10 M4,17 L4,21 L20,21 L20,17"));break;
+            case AppIconKind.Ai:
+                drawing.DrawGeometry(null,pen,Shape("M12,2 L15,9 22,12 15,15 12,22 9,15 2,12 9,9 Z"));break;
             case AppIconKind.Settings:
                 drawing.DrawGeometry(null, pen, Gear);
                 drawing.DrawEllipse(null, pen, new Point(12, 12), 3.1, 3.1);

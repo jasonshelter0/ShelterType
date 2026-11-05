@@ -162,6 +162,15 @@ public sealed class PracticeSession : IDisposable
     private static string ProgressPath(Course course, string dataDirectory)
         => Path.Combine(dataDirectory, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(course.Id))).ToLowerInvariant() + ".json");
 
+    public static void MigrateCourseIdentity(Course source,Course target,string directory)
+    {
+        var from=ProgressPath(source,directory);var to=ProgressPath(target,directory);
+        if(!CheckpointExists(from)||Fingerprint(source)!=Fingerprint(target))return;
+        var saved=ReadSavedState(source,from,out var notice);if(notice is not null)return;
+        if(CheckpointExists(to)&&ReadSavedState(target,to,out var existingNotice).Fingerprint==saved.Fingerprint&&existingNotice is null)return;
+        Directory.CreateDirectory(directory);if(File.Exists(to)&&!File.Exists(to+".before-shuffle"))File.Copy(to,to+".before-shuffle");
+        saved.CourseId=target.Id;File.WriteAllText(to+".tmp",JsonSerializer.Serialize(saved));File.Move(to+".tmp",to,true);
+    }
     public static bool MigrateWubiPosition(Course source,Course target,string directory)
     {
         if(target.InputMode!="wubi-ime"||target.BaseCourseId!=source.Id||source.Items.Count!=target.Items.Count||

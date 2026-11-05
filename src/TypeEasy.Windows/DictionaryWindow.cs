@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media.Imaging;
 using Wubi86.Core;
 using Wubi86.Models;
@@ -10,14 +11,15 @@ public sealed class DictionaryWindow : Window
 {
     private readonly TextBox query = new();
     private readonly ListBox results = new();
-    private readonly TextBlock details = new() { TextWrapping=TextWrapping.Wrap, FontSize=22 };
+    private readonly TextBlock emptyState=StatsUi.Text("",14,"Muted");
+    private readonly TextBlock details = StatsUi.Text("",14,"Muted");
     private readonly Image glyph = new() { Height=180, Stretch=System.Windows.Media.Stretch.Uniform };
     private readonly DictionaryGlyphStore glyphStore = new(Path.Combine(AppContext.BaseDirectory,"Dictionary"));
     private int glyphRequest;
     private bool closed;
     private SearchService? search;
     private SearchIndex? index;
-    private readonly ComboBox mode = StatsUi.Choice(220);
+    private readonly ComboBox mode = StatsUi.Choice(135);
     private readonly CheckBox favoritesOnly = new();
     private readonly Button favorite = new();
     private readonly string favoritesPath = Path.Combine(AppContext.BaseDirectory,"UserData","Dictionary","favorites.json");
@@ -47,10 +49,10 @@ public sealed class DictionaryWindow : Window
         SetResourceReference(BackgroundProperty,"Bg"); SetResourceReference(ForegroundProperty,"Ink");
         var layout=new DockPanel { Margin=new Thickness(20) };
         foreach(var label in new[] { UiText.T("全部","All","Tout"), UiText.T("拼音","Pinyin","Pinyin"), UiText.T("五笔编码","Wubi code","Code Wubi") }) mode.Items.Add(label);
-        mode.SelectedIndex=0; mode.Margin=new Thickness(0,0,0,8);
-        DockPanel.SetDock(mode,Dock.Top); layout.Children.Add(mode);
+        mode.SelectedIndex=0; mode.Margin=new Thickness(0,0,14,0);
+
         mode.SelectionChanged+=(_,_)=>Search();
-        var tools = new StackPanel { Orientation=Orientation.Horizontal, Margin=new Thickness(0,0,0,10) };
+        var tools = new WrapPanel { Orientation=Orientation.Horizontal, Margin=new Thickness(0,0,0,10) };
         favoritesOnly.Content=UiText.T("收藏","Favorites","Favoris");
         favoritesOnly.SetResourceReference(ForegroundProperty,"Ink");
         favoritesOnly.VerticalAlignment=VerticalAlignment.Center;
@@ -59,17 +61,17 @@ public sealed class DictionaryWindow : Window
         favorite.Margin=new Thickness(12,0,12,0); favorite.Click+=(_,_)=>ToggleFavorite();
         var roots=new Button { Content=UiText.T("字根表","Root chart","Table des radicaux") };
         roots.Click+=(_,_)=>new RootKeyboardWindow { Owner=this }.Show();
-        tools.Children.Add(favoritesOnly); tools.Children.Add(favorite); tools.Children.Add(roots);
+        tools.Children.Add(mode);tools.Children.Add(favoritesOnly); tools.Children.Add(favorite); tools.Children.Add(roots);
         DockPanel.SetDock(tools,Dock.Top); layout.Children.Add(tools);
         query.Text=initial;
         query.ToolTip=UiText.T("汉字、词组、拼音或五笔编码","Character, phrase, pinyin or Wubi code","Caractère, expression, pinyin ou code Wubi");
         System.Windows.Automation.AutomationProperties.SetName(query,query.ToolTip.ToString());
         query.Margin=new Thickness(0,0,0,12);
-        DockPanel.SetDock(query,Dock.Top); layout.Children.Add(query);
+        DockPanel.SetDock(query,Dock.Top); layout.Children.Insert(0,query);
         var bottom=new StackPanel { Margin=new Thickness(0,12,0,0) };
         bottom.Children.Add(details); bottom.Children.Add(new Border { Background=System.Windows.Media.Brushes.White, Child=glyph, Margin=new Thickness(0,8,0,0) });
         DockPanel.SetDock(bottom,Dock.Bottom); layout.Children.Add(bottom);
-        results.DisplayMemberPath=nameof(SearchResult.DisplayText); layout.Children.Add(results); Content=layout;
+        results.FontSize=16;results.DisplayMemberPath=nameof(SearchResult.DisplayText);var resultArea=new Grid();resultArea.Children.Add(results);emptyState.HorizontalAlignment=HorizontalAlignment.Center;emptyState.VerticalAlignment=VerticalAlignment.Center;emptyState.IsHitTestVisible=false;resultArea.Children.Add(emptyState);layout.Children.Add(resultArea);Content=layout;
         query.TextChanged+=(_,_)=>Search();
         results.SelectionChanged+=(_,_)=>ShowEntry();
         Loaded+=async(_,_)=>{
@@ -107,9 +109,13 @@ public sealed class DictionaryWindow : Window
         glyph.Source=null;
         if(glyph.Parent is Border) ((Border)glyph.Parent).Visibility=Visibility.Collapsed;
         if(results.SelectedItem is not SearchResult entry) {
-            details.Text=query.Text.Length==0?UiText.T("输入文字查询","Enter a query","Saisissez une recherche"):UiText.T("无匹配结果","No matches","Aucun résultat"); return;
+            details.Text="";emptyState.Visibility=Visibility.Visible;emptyState.Text=query.Text.Length==0?UiText.T("输入文字查询","Enter a query","Saisissez une recherche"):UiText.T("无匹配结果","No matches","Aucun résultat"); return;
         }
-        details.Text=entry.DisplayText+"    "+(entry.WubiCode??string.Join("  ",entry.WubiCodes??Array.Empty<string>()))+"\n"+string.Join(" / ",entry.Pinyins??Array.Empty<string>());
+        emptyState.Visibility=Visibility.Collapsed;details.Inlines.Clear();
+        var heading=new Run(entry.DisplayText){FontSize=30,FontWeight=FontWeights.SemiBold};heading.SetResourceReference(TextElement.ForegroundProperty,"Ink");details.Inlines.Add(heading);
+        details.Inlines.Add(new LineBreak());
+        var code=new Run(entry.WubiCode??string.Join("  ",entry.WubiCodes??Array.Empty<string>())){FontFamily=new System.Windows.Media.FontFamily("Consolas"),FontSize=18};code.SetResourceReference(TextElement.ForegroundProperty,"Accent");details.Inlines.Add(code);
+        details.Inlines.Add(new Run("   "+string.Join(" / ",entry.Pinyins??Array.Empty<string>())){FontSize=14});
         if(entry.GlyphKey is not { Length:1 } key)return;
         var bg = (TryFindResource("Bg") as System.Windows.Media.SolidColorBrush)?.Color ?? System.Windows.Media.Colors.White;
         var fg = (TryFindResource("Ink") as System.Windows.Media.SolidColorBrush)?.Color ?? System.Windows.Media.Colors.Black;

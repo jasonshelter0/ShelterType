@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Sdk = '',
     [string]$CourseRoot = '',
@@ -12,7 +12,7 @@ if (!$Sdk) {
 }
 if (!$CourseRoot) { $CourseRoot = $PSScriptRoot }
 $CourseRoot = [IO.Path]::GetFullPath($CourseRoot)
-$names = @('TypeEasy.Core.Tests', 'TypeEasy.Progress.Tests', 'TypeEasy.Analytics.Tests', 'TypeEasy.KeyboardStatistics.Tests', 'TypeEasy.PersonalPractice.Tests', 'TypeEasy.Heatmap.Tests', 'TypeEasy.FingerGuide.Tests', 'TypeEasy.ReviewMetadata.Tests', 'TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests')
+$names = @('TypeEasy.Core.Tests', 'TypeEasy.Progress.Tests', 'TypeEasy.Analytics.Tests', 'TypeEasy.KeyboardStatistics.Tests', 'TypeEasy.PersonalPractice.Tests', 'TypeEasy.Heatmap.Tests', 'TypeEasy.FingerGuide.Tests', 'TypeEasy.ReviewMetadata.Tests', 'TypeEasy.Integration.Tests', 'TypeEasy.Catalog.Tests', 'TypeEasy.Workflow.Tests')
 if ($IncludeUpdate) { $names += 'ShelterType.Update.Tests' }
 $config = Join-Path $PSScriptRoot 'NuGet.Config'
 foreach ($name in $names) {

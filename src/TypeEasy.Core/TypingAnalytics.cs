@@ -241,7 +241,7 @@ public sealed class AnalyticsStore
         data.Days = data.Days.OrderByDescending(x => x.Day).Take(4096).ToList();
         data.Keys = data.Keys.OrderByDescending(x => x.LastSeen).Take(4096).ToList();
         data.Contexts = data.Contexts.OrderByDescending(x => x.LastSeen).Take(4096).ToList();
-        data.SpeedTests = data.SpeedTests.OrderByDescending(x => x.FinishedAt).Take(1000).ToList();
+        data.SpeedTests = data.SpeedTests.OrderByDescending(x => x.FinishedAt).ToList();
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         using (var output = new FileStream(_path + ".tmp", FileMode.Create, FileAccess.Write, FileShare.None))
         {

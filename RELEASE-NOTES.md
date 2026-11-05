@@ -1,9 +1,17 @@
-# ShelterType 1.1.1
+# ShelterType 1.2.0
 
-修复 1.0.0 / 1.1.0 在独立启动时可能立即退出的问题：图标资源加载过早，在 WPF 注册 pack URI 之前触发 UriFormatException。现在在 Application 实例初始化之后加载图标。
+- 英文课程与测速按完整单词换行，参照文本和输入保持同一分行。
+- 统一测速、词典与统计入口图标。
+- 统计拆为总览、测试历史、错键分析、文章热力图；总览改用指标卡片。
+- 测试趋势可查看全部已保存记录，并按文章、语言和时长筛选；历史表每页 15 条。
+- 错键表支持逐行联动键盘，按同一文章范围汇总上下文。旧版只有汇总的逐键数据仍可在总览的“累计错键”查看，不能还原为某次测试。
+- AI 解读采用通用 OpenAI 兼容 HTTP 接口，无额外网关、浏览器或服务依赖。支持设置地址、模型、密钥及保存本地对话。
+- 文章管理支持导入 TXT、移除与恢复、打开原文目录；移除不销毁原文和进度。
+- 适用入门课程可在原课程内打乱，保存同一顺序和进度；兼容旧乱序课程记录。
 
-此版本直接使用独立 EXE 检查窗口创建和正常退出。词典资源包、深浅主题图片与资源复用更新功能保持不变。
-
-无法启动旧版的用户，请下载 ShelterType-win-x64.zip，退出程序后完整解压覆盖原程序目录；保留 UserData 文件夹，勿删除个人记录。名称含 code 的包仅供更新器使用，不是完整安装包。
-
-Fix a startup crash caused by loading the application icon before WPF initialized its pack URI support. Download the full ZIP and extract over the existing application folder, preserving UserData.
+AI 请求仅在用户点击发送后发起，发送可预览的统计摘要及最近六条消息。密钥使用 Windows 当前用户加密存储，对话保存在 UserData/AI。无需 AI 配置也可使用全部本地练习与统计。
+- 字根课程新增独立隐藏键位按钮，保留字根图。
+- 主界面、统计、设置统一扁平导航与无边框图标；词典筛选合并一行，结果按汉字、编码与拼音分层。
+- AI 支持 Chat Completions、Responses、Anthropic Messages，改为页内配置与对话。
+- 启动先显示品牌标志，主界面就绪后切换。
+- 仅发布完整 Windows 包，不再发布 code 包。

@@ -14,15 +14,17 @@ public sealed class SettingsWindow : Window
     private readonly bool canReview;
     private readonly bool canShuffle;
     private bool building;
+    private int selectedSection;
+    private readonly string? userRoot;
     private sealed record LanguageChoice(string Code, string Name)
     {
         public override string ToString() => Name;
     }
 
-    public SettingsWindow(Preferences preferences, Action changed, string summary, string warnings, bool canReview, bool canShuffle=false)
+    public SettingsWindow(Preferences preferences, Action changed, string summary, string warnings, bool canReview, bool canShuffle=false,string? userRoot=null)
     {
-        this.preferences = preferences; this.changed = changed; this.summary = summary; this.warnings = warnings; this.canReview = canReview;this.canShuffle=canShuffle;
-        Width = 580; Height = 700; MinWidth = 500; MinHeight = 540;
+        this.userRoot=userRoot;this.preferences = preferences; this.changed = changed; this.summary = summary; this.warnings = warnings; this.canReview = canReview;this.canShuffle=canShuffle;
+        Width = 840; Height = 640; MinWidth = 760; MinHeight = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 14;
         SetResourceReference(BackgroundProperty, "Bg"); SetResourceReference(ForegroundProperty, "Ink");
@@ -38,16 +40,23 @@ public sealed class SettingsWindow : Window
             Title = UiText.T("设置", "Settings", "Paramètres");
             Language = System.Windows.Markup.XmlLanguage.GetLanguage(UiText.Culture.IetfLanguageTag);
             var root = new DockPanel { Margin = new Thickness(24) };
-            var footer = new DockPanel { Margin = new Thickness(0, 16, 0, 0) };
+            var footer = new DockPanel { LastChildFill=false, Margin = new Thickness(0, 16, 0, 0) };
             var done = Button(UiText.T("完成", "Done", "Terminé"), (_, _) => Close());
             DockPanel.SetDock(done, Dock.Right); footer.Children.Add(done);
-            var about = Button(UiText.T("关于", "About", "À propos"), (_, _) => new AboutWindow { Owner = this }.ShowDialog());
-            about.HorizontalAlignment = HorizontalAlignment.Left; footer.Children.Add(about);
             DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
-            var body = new StackPanel();
-            root.Children.Add(new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
-            Content = root;
-            void Heading(string title) => body.Children.Add(new TextBlock { Text = title, FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 12) });
+            var navigation=new StackPanel{Width=182,Margin=new Thickness(0,0,24,0)};
+            DockPanel.SetDock(navigation,Dock.Left);root.Children.Add(navigation);
+            var page=new ContentControl{HorizontalContentAlignment=HorizontalAlignment.Stretch};root.Children.Add(page);Content=root;
+            var body=new StackPanel();int sectionIndex=0;
+            void Heading(string title){
+                int index=sectionIndex++;body=new StackPanel();
+                var kinds=new[]{AppIconKind.Settings,AppIconKind.Focus,AppIconKind.Articles,AppIconKind.Ai,AppIconKind.Update};
+                var tab=StatsUi.IconButton(kinds[index],title,(_,_)=>{selectedSection=index;Rebuild();});tab.SetResourceReference(StyleProperty,"SidebarNavButton");tab.Width=182;tab.Height=42;tab.Margin=new Thickness(0,0,0,5);
+                var label=new StackPanel{Orientation=Orientation.Horizontal};label.Children.Add(new AppIcon{Kind=kinds[index],Width=19,Height=19,Margin=new Thickness(0,0,10,0)});label.Children.Add(new TextBlock{Text=title,FontSize=13,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,MaxWidth=135});tab.Content=label;
+                tab.SetResourceReference(BackgroundProperty,index==selectedSection?"Selected":"Bg");navigation.Children.Add(tab);
+                body.Children.Add(StatsUi.Text(title,23));body.Children.Add(new Border{Height=22});
+                if(index==selectedSection)page.Content=new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            }
             Heading(UiText.T("外观与语言", "Appearance and language", "Apparence et langue"));
             var languageRow = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
             var language = StatsUi.Choice(190); language.Margin = new Thickness(0); StatsUi.NamedItems(language, nameof(LanguageChoice.Name));
@@ -93,6 +102,8 @@ public sealed class SettingsWindow : Window
                 var button = Button(title, (_, _) => { RequestedAction = action; Close(); }); button.IsEnabled = enabled;
                 button.Margin = new Thickness(0, 0, 8, 8); actions.Children.Add(button);
             }
+            ActionButton(UiText.T("文章管理", "Text library", "Bibliothèque"), "articles");
+
             ActionButton(UiText.T("课程目录", "Lesson folder", "Dossier des cours"), "folder");
             ActionButton(UiText.T("乱序练习", "Shuffle lesson", "Mélanger le cours"), "shuffle", canShuffle);
             ActionButton(UiText.T("86 字根键盘", "86 root keyboard", "Clavier des radicaux 86"), "roots");
@@ -109,10 +120,13 @@ public sealed class SettingsWindow : Window
                 : string.Join(Environment.NewLine, warnings.Split('\n').Select(s => CourseLabels.Hint(s.Trim())));
             var detail = new Expander { Header = detailTitle, Margin = new Thickness(0, 8, 0, 0), Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 10, 0, 0) } };
             detail.SetResourceReference(ForegroundProperty, "Muted"); body.Children.Add(detail);
+            Heading(UiText.T("AI 接口与对话","AI connection and chats","Connexion et conversations IA"));
+            if(selectedSection==3 && userRoot is not null)body.Children.Add(new AiPanel(userRoot,TypeEasy.Core.TestAnalytics.OverallSummary(new TypeEasy.Core.AnalyticsStore(System.IO.Path.Combine(userRoot,"Analytics"))),"ShelterType"){Height=600});
             Heading(UiText.T("软件更新", "Software updates", "Mises à jour"));
             Check(UiText.T("自动检查更新", "Check for updates automatically", "Rechercher automatiquement les mises à jour"), preferences.CheckForUpdates, v => preferences.CheckForUpdates = v);
             var update = Button(UiText.T("检查更新", "Check for updates", "Rechercher une mise à jour"), (_, _) => { RequestedAction = "update"; Close(); });
             update.HorizontalAlignment = HorizontalAlignment.Left; body.Children.Add(update);
+            var about=StatsUi.IconButton(AppIconKind.Info,UiText.T("关于","About","À propos"),(_,_)=>new AboutWindow{Owner=this}.ShowDialog());about.SetResourceReference(StyleProperty,"SidebarNavButton");about.Width=182;about.Height=42;about.Margin=new Thickness(0,20,0,0);var aboutLabel=new StackPanel{Orientation=Orientation.Horizontal};aboutLabel.Children.Add(new AppIcon{Kind=AppIconKind.Info,Width=19,Height=19,Margin=new Thickness(0,0,10,0)});aboutLabel.Children.Add(StatsUi.Text(UiText.T("关于","About","À propos"),13));about.Content=aboutLabel;navigation.Children.Add(about);
         }
         finally { building = false; }
     }

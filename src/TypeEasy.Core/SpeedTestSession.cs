@@ -9,8 +9,11 @@ public sealed class SystemTypingClock : ITypingClock
 }
 public enum SpeedTestStatus { Completed, Exhausted, Cancelled }
 
+public sealed record TestInputCount(string Expected,string Actual,string Before,string After,long Count);
+
 public sealed class SpeedTestResult
 {
+    public List<TestInputCount>? InputCounts { get; set; }
     public string Id { get; set; } = "";
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset FinishedAt { get; set; }
@@ -156,6 +159,7 @@ public sealed class SpeedTestSession : IDisposable
                 : !_started.HasValue ? 0 : Math.Clamp((_clock.UtcNow - _started.Value).TotalSeconds, 0, DurationSeconds);
             Result = new SpeedTestResult
             {
+                InputCounts = _attempts.GroupBy(x=>(x.Expected,x.Actual,x.Before,x.After)).Select(g=>new TestInputCount(g.Key.Expected,g.Key.Actual,g.Key.Before,g.Key.After,g.LongCount())).ToList(),
                 Id = _id, StartedAt = _started ?? _clock.UtcNow,
                 FinishedAt = status == SpeedTestStatus.Completed ? _started!.Value.AddSeconds(DurationSeconds) : _clock.UtcNow,
                 Mode = TypingMode.ForCourse(_course), SourceId = _course.Id, SourceTitle = _course.Title, SourceGroup = _course.Group,

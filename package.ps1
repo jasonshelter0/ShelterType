@@ -78,18 +78,3 @@ Write-Host "Version: $version"
 Write-Host "Package: $archive"
 Write-Host "SHA256:  $digest"
 Write-Host "Built app for testing: $staging"
-
-# A second package retains the installed dictionary pack. Old clients still use the full ZIP.
-$codeName = 'ShelterType-code-' + $resourceHash + '-win-x64.zip'
-$codeArchive = Join-Path $OutputDirectory $codeName
-$codeZip = [IO.Compression.ZipFile]::Open($codeArchive, [IO.Compression.ZipArchiveMode]::Create)
-try {
-    foreach ($file in Get-ChildItem -LiteralPath $staging -File -Recurse) {
-        if ($file.FullName -eq $glyphPack) { continue }
-        $relative = [IO.Path]::GetRelativePath($staging, $file.FullName).Replace('\','/')
-        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($codeZip,$file.FullName,$relative,[IO.Compression.CompressionLevel]::Optimal) | Out-Null
-    }
-} finally { $codeZip.Dispose() }
-$codeHash = (Get-FileHash -LiteralPath $codeArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.File]::WriteAllText(($codeArchive+'.sha256'),$codeHash+'  '+$codeName+[Environment]::NewLine,[Text.UTF8Encoding]::new($false))
-Write-Host "Code-only update: $codeArchive"

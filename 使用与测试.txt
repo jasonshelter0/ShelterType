@@ -1,4 +1,4 @@
-ShelterType 0.8.0 — Windows 原生打字练习
+ShelterType 1.2.0 — Windows 原生打字练习
 
 启动
 从 GitHub Release 下载 ShelterType-win-x64.zip，完整解压到可写目录，然后双击 ShelterType.exe。

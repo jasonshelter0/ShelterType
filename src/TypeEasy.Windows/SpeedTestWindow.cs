@@ -13,6 +13,7 @@ namespace TypeEasy.Windows;
 /// <summary>A native timed test. Only committed IME text reaches the portable session.</summary>
 public sealed class SpeedTestWindow : Window
 {
+    private readonly Button ai;
     private readonly AlignedTyping alignedTyping=new();
     private readonly string root;
     private readonly List<Course> courses;
@@ -29,14 +30,15 @@ public sealed class SpeedTestWindow : Window
     private List<Course> eligibleCourses = new();
     private string? lastRandomId;
     private readonly TextBlock passageTitle=StatsUi.Text("",16);
-    public SpeedTestWindow(string userDataRoot,List<Course> availableCourses)
+    public SpeedTestWindow(string userDataRoot,List<Course> availableCourses,string? courseRoot=null)
     {
-        root=userDataRoot;courses=availableCourses;analytics=new AnalyticsStore(Path.Combine(root,"Analytics"));
+        courseRoot=string.IsNullOrWhiteSpace(courseRoot)?AppContext.BaseDirectory:courseRoot;root=userDataRoot;courses=availableCourses;analytics=new AnalyticsStore(Path.Combine(root,"Analytics"));
         StatsUi.Window(this,UiText.T("限时测试","Timed test","Test chronométré"),1040,740);
         var layout=new DockPanel{Margin=new Thickness(26)};
         var header=new DockPanel{Margin=new Thickness(0,0,0,16)};
-        var trend=StatsUi.Button(UiText.T("个人统计","Statistics","Statistiques"),(_,_)=>{var dialog=new StatisticsWindow(root,courses){Owner=this};dialog.ShowDialog();});DockPanel.SetDock(trend,Dock.Right);header.Children.Add(trend);
-        var dictionary=StatsUi.Button(UiText.T("词典  F2","Dictionary  F2","Dictionnaire  F2"),(_,_)=>OpenDictionary());DockPanel.SetDock(dictionary,Dock.Right);header.Children.Add(dictionary);
+        var trend=StatsUi.IconButton(AppIconKind.Statistics,UiText.T("个人统计","Statistics","Statistiques"),(_,_)=>{var dialog=new StatisticsWindow(root,courses){Owner=this};dialog.ShowDialog();});DockPanel.SetDock(trend,Dock.Right);header.Children.Add(trend);
+        var dictionary=StatsUi.IconButton(AppIconKind.Dictionary,UiText.T("词典  F2","Dictionary  F2","Dictionnaire  F2"),(_,_)=>OpenDictionary());DockPanel.SetDock(dictionary,Dock.Right);header.Children.Add(dictionary);
+        var library=StatsUi.IconButton(AppIconKind.Articles,UiText.T("文章管理","Text library","Bibliothèque"),(_,_)=>{if(session is {IsFinished:false})return;new ArticleLibraryWindow(root,courseRoot,courses){Owner=this}.ShowDialog();var updated=ArticleLibrary.Apply(CourseCatalog.Load(courseRoot),root);courses.RemoveAll(ArticleLibrary.IsArticle);courses.AddRange(updated.Where(ArticleLibrary.IsArticle));LoadSources();});DockPanel.SetDock(library,Dock.Right);header.Children.Add(library);
         var heading=new StackPanel();heading.Children.Add(StatsUi.Text(UiText.T("限时测试","Timed test","Test chronométré"),26));heading.Children.Add(StatsUi.Text(UiText.T("首键开始计时，切换窗口不暂停。","The first key starts the timer. Switching windows does not pause it.","La première frappe lance le chrono. Changer de fenêtre ne le suspend pas."),12,"Muted"));header.Children.Add(heading);DockPanel.SetDock(header,Dock.Top);layout.Children.Add(header);
         var scroll=new ScrollViewer{VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,HorizontalContentAlignment=HorizontalAlignment.Stretch};var stack=new StackPanel{HorizontalAlignment=HorizontalAlignment.Stretch};scroll.Content=stack;layout.Children.Add(scroll);
         var fields=new WrapPanel();fields.Children.Add(StatsUi.Field(UiText.T("语言","Language","Langue"),mode));fields.Children.Add(StatsUi.Field(UiText.T("时长","Duration","Durée"),duration));fields.Children.Add(StatsUi.Field(UiText.T("文章","Text","Texte"),source));stack.Children.Add(StatsUi.Card(fields));
@@ -45,7 +47,7 @@ public sealed class SpeedTestWindow : Window
         reference.LineHeight=35;reference.Margin=new Thickness(0,18,0,12);
         test.Children.Add(new ScrollViewer{Content=reference,Height=66,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});test.Children.Add(positionText);
         input.Margin=new Thickness(0,14,0,8);System.Windows.Automation.AutomationProperties.SetName(input,UiText.T("测试输入框","Test typing field","Zone de saisie du test"));test.Children.Add(input);test.Children.Add(feedback);stack.Children.Add(StatsUi.Card(test));
-        var actions=new WrapPanel{Margin=new Thickness(0,0,0,14)};start=StatsUi.Button(UiText.T("准备开始","Get ready","Préparer"),(_,_)=>Prepare());cancel=StatsUi.Button(UiText.T("中止","Stop","Arrêter"),(_,_)=>Guard(()=>{CancelRun();}));cancel.IsEnabled=false;actions.Children.Add(start);actions.Children.Add(cancel);heatmap=StatsUi.Button(UiText.T("本篇热力图","Text heatmap","Carte du texte"),(_,_)=>OpenHeatmap());heatmap.IsEnabled=false;heatmap.Visibility=Visibility.Collapsed;actions.Children.Add(heatmap);stack.Children.Add(actions);
+        var actions=new WrapPanel{Margin=new Thickness(0,0,0,14)};start=StatsUi.Button(UiText.T("准备开始","Get ready","Préparer"),(_,_)=>Prepare());cancel=StatsUi.Button(UiText.T("中止","Stop","Arrêter"),(_,_)=>Guard(()=>{CancelRun();}));cancel.IsEnabled=false;actions.Children.Add(start);actions.Children.Add(cancel);heatmap=StatsUi.Button(UiText.T("本篇热力图","Text heatmap","Carte du texte"),(_,_)=>OpenHeatmap());heatmap.IsEnabled=false;heatmap.Visibility=Visibility.Collapsed;actions.Children.Add(heatmap);ai=StatsUi.IconButton(AppIconKind.Ai,UiText.T("AI 解读","AI coach","Analyse IA"),(_,_)=>{if(session?.Result is {} run)AiPanel.Open(this,root,TestAnalytics.CompactSummary(new[]{run}),run.SourceTitle);});ai.IsEnabled=false;actions.Children.Add(ai);stack.Children.Add(actions);
         resultText.Margin=new Thickness(0,0,0,12);resultText.TextWrapping=TextWrapping.NoWrap;resultText.FontSize=16;resultText.LineHeight=28;
         stack.Children.Add(new ScrollViewer{Content=resultText,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled});stack.Children.Add(StatsUi.Explanation(UiText.T(
             "错键不前进，可直接重输；退格回退一个已输入字符。净字符/分包含空格和标点。中文按提交的文字计数；英文等效词/分按 5 字符折算。中止或提前打完的记录不进入完整测试趋势。",
@@ -98,11 +100,12 @@ public sealed class SpeedTestWindow : Window
     {
         if(loading||session is {IsFinished:false})return;
         countdown.Text=TimeSpan.FromSeconds(Seconds).ToString(@"mm\:ss");
-        if(source.SelectedItem is CourseChoice choice){var text=choice.Course is null?"":string.Concat(choice.Course.Items.Select(i=>i.Expected));reference.Text=choice.Course is null?UiText.T("开始时随机选择文章","A text will be chosen when you start","Un texte sera choisi au démarrage"):text[..Math.Min(220,text.Length)];positionText.Text=choice.Course is null?"":UiText.Format("共 {0:N0} 字符","{0:N0} characters","{0:N0} caractères",text.Length);feedback.Text="";start.IsEnabled=true;}
+        if(source.SelectedItem is CourseChoice choice){reference.FontSize=choice.Course is null?15:24;reference.SetResourceReference(TextBlock.ForegroundProperty,choice.Course is null?"Muted":"Ink");var text=choice.Course is null?"":string.Concat(choice.Course.Items.Select(i=>i.Expected));reference.Text=choice.Course is null?UiText.T("开始时随机选择文章","A text will be chosen when you start","Un texte sera choisi au démarrage"):text[..Math.Min(220,text.Length)];positionText.Text=choice.Course is null?"":UiText.Format("共 {0:N0} 字符","{0:N0} characters","{0:N0} caractères",text.Length);feedback.Text="";start.IsEnabled=true;}
         else{reference.Text=UiText.T("没有可用文章，请先在主窗口加载课程。","No texts available. Load the courses in the main window first.","Aucun texte disponible. Chargez les cours dans la fenêtre principale.");start.IsEnabled=false;}
     }
     private void Prepare()
     {
+        reference.SetResourceReference(TextBlock.ForegroundProperty,"Ink");
         Guard(()=>
         {
             if(source.SelectedItem is not CourseChoice choice)return;
@@ -111,7 +114,7 @@ public sealed class SpeedTestWindow : Window
             var course=choice.Course??pool[Random.Shared.Next(pool.Count)];
             if(choice.Course is null)lastRandomId=course.Id;
             passageTitle.Text=CourseLabels.Title(course);passageTitle.ToolTip=course.Author+"\n"+course.SourceUrl;
-            session?.Dispose();session=new SpeedTestSession(course,Seconds,analytics);renderedResult=false;composing=false;
+            session?.Dispose();session=new SpeedTestSession(course,Seconds,analytics);renderedResult=false;composing=false;ai.IsEnabled=false;
             mode.IsEnabled=duration.IsEnabled=source.IsEnabled=false;start.IsEnabled=false;cancel.IsEnabled=true;heatmap.IsEnabled=false;heatmap.Visibility=Visibility.Collapsed;input.IsEnabled=true;input.Clear();resultText.Text="";
             InputMethod.SetIsInputMethodEnabled(input,course.Category=="中文");
             feedback.Text=UiText.T("请开始输入。","Start typing.","Commencez à taper.");
@@ -157,13 +160,13 @@ public sealed class SpeedTestWindow : Window
         }
         if(!session.IsFinished||renderedResult)return;
         renderedResult=true;timer.Stop();input.IsEnabled=false;mode.IsEnabled=duration.IsEnabled=source.IsEnabled=true;start.IsEnabled=true;start.Content=UiText.T("再测一次","Try again","Recommencer");cancel.IsEnabled=false;
-        var result=session.Result;heatmap.IsEnabled=result is not null&&result.Status!=SpeedTestStatus.Cancelled;heatmap.Visibility=heatmap.IsEnabled?Visibility.Visible:Visibility.Collapsed;if(result is null){feedback.Text=UiText.T("尚未计时，没有新增记录。","The timer did not start; no record was added.","Le chrono n’a pas démarré ; aucun résultat ajouté.");return;}
+        var result=session.Result;ai.IsEnabled=result is not null;heatmap.IsEnabled=result is not null&&result.Status!=SpeedTestStatus.Cancelled;heatmap.Visibility=heatmap.IsEnabled?Visibility.Visible:Visibility.Collapsed;if(result is null){feedback.Text=UiText.T("尚未计时，没有新增记录。","The timer did not start; no record was added.","Le chrono n’a pas démarré ; aucun résultat ajouté.");return;}
         var label=result.Status switch{SpeedTestStatus.Completed=>UiText.T("测试完成","Test complete","Test terminé"),SpeedTestStatus.Exhausted=>UiText.T("文章已打完（未满时长）","Text finished before the time limit","Texte terminé avant la limite"),_=>UiText.T("测试已中止","Test stopped","Test arrêté")};
         var equivalent=result.Mode==TypingMode.ForCourse(new Course{Category="英文"})?UiText.Format("（{0:0.0} 等效词/分）"," ({0:0.0} equivalent words/min)"," ({0:0.0} mots équivalents/min)",result.EnglishEquivalentWpm):"";
         resultText.Text=label+"\n"+UiText.Format("{0:0.0} 净字符/分{1}    正确率 {2:P1}","{0:0.0} net characters/min{1}    Accuracy {2:P1}","{0:0.0} caractères nets/min{1}    Précision {2:P1}",result.CharactersPerMinute,equivalent,result.Accuracy)
             +"\n"+UiText.Format("{0:N0} 净字符，{1:N0} 次错误，{2:N0} 次退格，用时 {3:0.0} 秒","{0:N0} net characters, {1:N0} errors, {2:N0} backspaces, {3:0.0} s","{0:N0} caractères nets, {1:N0} erreurs, {2:N0} retours arrière, {3:0.0} s",result.NetCharacters,result.Errors,result.Backspaces,result.ElapsedSeconds);
         Dispatcher.BeginInvoke(()=>resultText.BringIntoView(),DispatcherPriority.Loaded);
-        positionText.Text=UiText.T("记录已保存。","Result saved.","Résultat enregistré.");feedback.Text=result.Status==SpeedTestStatus.Completed?"":UiText.T("此记录不计入完整测试趋势。","Excluded from full-test trends.","Exclu des tendances des tests complets.");
+        positionText.Text=UiText.T("记录已保存。","Result saved.","Résultat enregistré.");feedback.Text=result.Status==SpeedTestStatus.Completed?"":UiText.T("此记录已保存为未完成测试。","Saved as an incomplete test.","Enregistré comme test incomplet.");
         feedback.SetResourceReference(TextBlock.ForegroundProperty,"Muted");
     }
     private void OpenHeatmap()

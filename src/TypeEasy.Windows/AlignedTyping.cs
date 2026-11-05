@@ -33,7 +33,17 @@ internal sealed class AlignedTyping
                 var part=text[start..end];
                 var measure=new FormattedText(part,UiText.Culture,FlowDirection.LeftToRight,new Typeface(reference.FontFamily,FontStyles.Normal,FontWeights.Normal,FontStretches.Normal),24,Brushes.Black,VisualTreeHelper.GetDpi(reference).PixelsPerDip);
                 if(text[end-1]=='\n'){if(end<text.Length)starts.Add(end);start=end;}
-                else if(measure.WidthIncludingTrailingWhitespace>width&&end-start>1){starts.Add(end-1);start=end-1;}
+                else if(measure.WidthIncludingTrailingWhitespace>width&&end-start>1)
+                {
+                    int split=end-1;
+                    bool Word(char c)=>char.IsAsciiLetterOrDigit(c)||c is '\'' or '’';
+                    if(split<text.Length && Word(text[split]) && Word(text[split-1]))
+                    {
+                        while(split>start && Word(text[split-1]))split--;
+                        if(split==start)continue; // An overlong word stays whole.
+                    }
+                    if(split>start){starts.Add(split);start=split;}
+                }
             }
         }
         position=Math.Clamp(position,0,text.Length);

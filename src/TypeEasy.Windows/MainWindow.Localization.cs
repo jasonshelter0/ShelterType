@@ -9,7 +9,8 @@ public partial class MainWindow
     private void ApplyLanguage(bool rebuildCourses = true)
     {
         UiText.Language = prefs.Language;
-        DictionaryButton.Content = UiText.T("五笔86词典  F2", "Wubi 86 dictionary  F2", "Dictionnaire Wubi 86  F2");
+        DictionaryButton.Content = new AppIcon{Kind=AppIconKind.Dictionary};
+        SetButtonLabel(DictionaryButton,UiText.T("五笔86词典  F2", "Wubi 86 dictionary  F2", "Dictionnaire Wubi 86  F2"));
         prefs.Language = UiText.Language;
         Title = "ShelterType";
         BrandLabel.Text = "ShelterType";

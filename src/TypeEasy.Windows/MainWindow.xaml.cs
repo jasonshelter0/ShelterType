@@ -78,20 +78,31 @@ public partial class MainWindow : Window
         catch (Exception ex) when(ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException) { SaveLabel.Text = ""; StatusLabel.Text = UiText.T("无法读写记录：", "Could not read or save records: ", "Impossible de lire ou d’enregistrer les données : ") + ex.Message;StatusLabel.Visibility=Visibility.Visible; if(session is not null) InputBox.IsEnabled=false; }
     }
     private SolidColorBrush Brush(string name) => (SolidColorBrush)Application.Current.Resources[name];
+    private void Articles_Click(object sender,RoutedEventArgs e){if(session is not null)Guard(()=>session.Pause());new ArticleLibraryWindow(store,string.IsNullOrWhiteSpace(prefs.DataRoot)?AppContext.BaseDirectory:prefs.DataRoot,courses){Owner=this}.ShowDialog();LoadCatalog();}
+    private void ShuffleLesson_Click(object sender,RoutedEventArgs e)
+    {
+        Guard(()=>{
+            if(session is null||!ShuffledPractice.CanShuffle(session.Course))return;
+            var shuffled=ShuffledPractice.Create(session.Course,Path.Combine(store,"Shuffled"));
+            session.Reset();var index=courses.FindIndex(c=>c.Id==shuffled.Id);if(index>=0)courses[index]=shuffled;
+            FilterCourses(shuffled.Id);Render();
+        });
+    }
     private void LoadCatalog()
     {
         Guard(() => {
             session?.Dispose(); session = null;
             var root = !string.IsNullOrWhiteSpace(prefs.DataRoot) ? prefs.DataRoot : AppContext.BaseDirectory;
             courses = CourseCatalog.Load(root).Select(source=>{var target=WubiInput.ForCourse(source);if(!ReferenceEquals(source,target))PracticeSession.MigrateWubiPosition(source,target,Path.Combine(store,"Progress"));return target;}).ToList();
+            courses=ArticleLibrary.Apply(courses,store);
             LoadPersonalPracticeCourses();
-            courses.AddRange(ShuffledPractice.Load(Path.Combine(store,"Shuffled"),courses).ToList());
+            foreach(var shuffled in ShuffledPractice.Load(Path.Combine(store,"Shuffled"),courses,Path.Combine(store,"Progress")).ToList()){var index=courses.FindIndex(c=>c.Id==shuffled.Id);if(index>=0)courses[index]=shuffled;}
             var reviews=Path.Combine(store,"Reviews");
             if(Directory.Exists(reviews)) foreach(var file in Directory.EnumerateFiles(reviews,"*.json")) {
                 try {var review=JsonSerializer.Deserialize<Course>(File.ReadAllText(file)); var source=review is null?null:courses.FirstOrDefault(c=>review.Id=="review:"+c.Id); if(review is not null && review.Items.Count>0 && source is not null) {review.Origin=source.Origin;review.SourceUrl=source.SourceUrl;review.Author=source.Author;review.License=source.License;review.InputMode=source.InputMode;review.Group="错键巩固/"+source.Variant;review.TeachingImage=source.TeachingImage;courses.Add(review);}}
                 catch(JsonException) { }
             }
-            var previous = courses.FirstOrDefault(c => c.Id == prefs.LastCourse)??courses.FirstOrDefault(c=>c.InputMode=="wubi-ime"&&c.BaseCourseId==prefs.LastCourse);
+            var previous = courses.FirstOrDefault(c => c.Id == prefs.LastCourse || "shuffle:"+c.Id==prefs.LastCourse)??courses.FirstOrDefault(c=>c.InputMode=="wubi-ime"&&c.BaseCourseId==prefs.LastCourse);
             LoadCourseProgress();
             category = previous?.Category ?? "英文";
             FilterCourses(previous?.Id);
@@ -155,6 +166,7 @@ public partial class MainWindow : Window
     {
         if(session is null) return;
         RestartCourseButton.Visibility=session.IsComplete?Visibility.Visible:Visibility.Collapsed;
+        ShuffleLessonButton.IsEnabled=ShuffledPractice.CanShuffle(session.Course);
         var item=session.CurrentItem; var wubi=session.Course.Category=="五笔"; var phonetic=session.Course.InputMode=="pinyin";
         PositionLabel.Text=session.IsComplete ? UiText.T("已完成", "Completed", "Terminé") : $"{session.State.ItemIndex+1:N0} / {session.Course.Items.Count:N0}";
         PromptLabel.FontSize=wubi||phonetic?32:18;
@@ -172,7 +184,9 @@ public partial class MainWindow : Window
         NextLabel.Text=session.IsComplete ? "" : introductory||phonetic ? CourseLabels.Hint(item?.Hint ?? "") : "";
         InputBox.IsEnabled=!session.IsComplete;
         if(session.IsComplete) FeedbackLabel.Text="";
-        var concealed=!prefs.ShowHints&&(wubi||phonetic)&&session.Course.InputMode!="wubi-ime";
+        var rootLesson=wubi&&session.Course.Group.Contains("字根");
+        RootHintButton.Visibility=rootLesson?Visibility.Visible:Visibility.Collapsed;RootHintButton.Content=prefs.HideRootKey?UiText.T("显示键位","Show key","Afficher la touche"):UiText.T("隐藏键位","Hide key","Masquer la touche");
+        var concealed=(rootLesson&&prefs.HideRootKey)||!prefs.ShowHints&&(wubi||phonetic)&&session.Course.InputMode!="wubi-ime";
         if(concealed && item is not null) {ExpectedLabel.Text=session.State.CharacterIndex==0?"…":item.Expected[..session.State.CharacterIndex];NextLabel.Text="";}
         KeyboardGuide.WubiZones=wubi;
         KeyboardGuide.SetTarget(concealed?null:session.ExpectedCharacter,session.Course.Id.Contains("numpad",StringComparison.OrdinalIgnoreCase));
@@ -191,6 +205,7 @@ public partial class MainWindow : Window
         StatsLabel.Text=UiText.Format("{0:0} 字符/分    {1:P0} 正确    {2:00}:{3:00}", "{0:0} chars/min    {1:P0} accuracy    {2:00}:{3:00}", "{0:0} car./min    {1:P0} de précision    {2:00}:{3:00}", session.CharactersPerMinute, session.Accuracy, (int)elapsed.TotalMinutes, elapsed.Seconds);
         if(ProgressFill.Parent is FrameworkElement parent) ProgressFill.Width=Math.Max(0,parent.ActualWidth*session.Progress);
     }
+    private void RootHint_Click(object sender,RoutedEventArgs e){prefs.HideRootKey=!prefs.HideRootKey;SavePrefs();FeedbackLabel.Text="";Render();InputBox.Focus();}
     private void RestartCourse_Click(object sender,RoutedEventArgs e)
     {
         if(session is null)return;
@@ -266,6 +281,7 @@ public partial class MainWindow : Window
     {
         bool sidebar=prefs.ShowSidebar&&!focusMode;
         SidebarPanel.Visibility=sidebar?Visibility.Visible:Visibility.Collapsed;
+        ShuffleLessonButton.IsEnabled=session is not null&&ShuffledPractice.CanShuffle(session.Course);
         SidebarColumn.Width=new GridLength(sidebar?260:0);SidebarGap.Width=new GridLength(sidebar?20:0);
         SidebarIcon.Kind=sidebar?AppIconKind.SidebarOpen:AppIconKind.SidebarClosed;
         SetButtonLabel(SidebarButton, sidebar?UiText.T("隐藏课程目录", "Hide course list", "Masquer la liste des cours"):UiText.T("显示课程目录", "Show course list", "Afficher la liste des cours"));
@@ -286,18 +302,20 @@ public partial class MainWindow : Window
     private void Sidebar_Click(object sender,RoutedEventArgs e) {if(focusMode){focusMode=false;prefs.ShowSidebar=true;}else prefs.ShowSidebar=!prefs.ShowSidebar;SavePrefs();ApplyLayout();}
     private void Focus_Click(object sender,RoutedEventArgs e) {focusMode=!focusMode;ApplyLayout();InputBox.Focus();}
     private void Window_Key(object sender,KeyEventArgs e) {if(e.Key==Key.F11){e.Handled=true;Focus_Click(this,new RoutedEventArgs());}else if(e.Key==Key.Escape&&focusMode){e.Handled=true;focusMode=false;ApplyLayout();}}
-    private void Speed_Click(object sender,RoutedEventArgs e) {if(session is not null)Guard(()=>session.Pause());var window=new SpeedTestWindow(store,courses){Owner=this};window.ShowDialog();}
+    private void Speed_Click(object sender,RoutedEventArgs e) {if(session is not null)Guard(()=>session.Pause());var window=new SpeedTestWindow(store,courses,prefs.DataRoot){Owner=this};window.ShowDialog();}
     private void Statistics_Click(object sender,RoutedEventArgs e) {if(session is not null)Guard(()=>session.Pause());var window=new StatisticsWindow(store,courses){Owner=this};window.ShowDialog();}
     private void Settings_Click(object sender,RoutedEventArgs e)
     {
         if(session is not null)Guard(()=>session.Pause());
         var summary=UiText.Format("{0} 门课程", "{0} courses", "{0} cours", courses.Count);
         var oldLanguage=UiText.Language;
-        var window=new SettingsWindow(prefs,()=>{if(oldLanguage!=prefs.Language){ApplyLanguage();oldLanguage=UiText.Language;}ApplyTheme();Render();ApplyLayout();SavePrefs();},summary,string.Join("\n",CourseCatalog.Warnings),session?.State.Errors>0,session is not null&&ShuffledPractice.CanShuffle(session.Course)){Owner=this};
+        var window=new SettingsWindow(prefs,()=>{if(oldLanguage!=prefs.Language){ApplyLanguage();oldLanguage=UiText.Language;}ApplyTheme();Render();ApplyLayout();SavePrefs();},summary,string.Join("\n",CourseCatalog.Warnings),session?.State.Errors>0,session is not null&&ShuffledPractice.CanShuffle(session.Course),store){Owner=this};
         window.ShowDialog();
         switch(window.RequestedAction){
+            case "ai":AiPanel.Open(this,store,TestAnalytics.OverallSummary(new AnalyticsStore(Path.Combine(store,"Analytics"))),UiText.T("全部测试","All tests","Tous les tests"));break;
+            case "articles":new ArticleLibraryWindow(store,string.IsNullOrWhiteSpace(prefs.DataRoot)?AppContext.BaseDirectory:prefs.DataRoot,courses){Owner=this}.ShowDialog();LoadCatalog();break;
             case "roots":new RootKeyboardWindow{Owner=this}.Show();break;
-            case "shuffle":Guard(()=>{if(session is null)return;var shuffled=ShuffledPractice.Create(session.Course,Path.Combine(store,"Shuffled"));courses.RemoveAll(c=>c.Id==shuffled.Id);courses.Add(shuffled);FilterCourses(shuffled.Id);session?.Reset();Render();});break;
+            case "shuffle":Guard(()=>{if(session is null)return;var shuffled=ShuffledPractice.Create(session.Course,Path.Combine(store,"Shuffled"));session.Reset();var index=courses.FindIndex(c=>c.Id==shuffled.Id);if(index>=0)courses[index]=shuffled;FilterCourses(shuffled.Id);Render();});break;
             case "folder":Folder_Click(this,new RoutedEventArgs());break;
             case "reference":Reference_Click(this,new RoutedEventArgs());break;
             case "demo":focusMode=false;prefs.ShowKeyboard=true;prefs.ShowHands=true;ApplyLayout();KeyboardGuide.ToggleDemo();break;
@@ -339,6 +357,7 @@ public sealed class Preferences
     public bool ShowKeyboard {get;set;}=true;
     public bool ShowHands {get;set;}=true;
     public bool ShowHints {get;set;}=true;
+    public bool HideRootKey {get;set;}
     public bool ShowStats {get;set;}=true;
     public bool FocusShowKeyboard {get;set;}=false;
 }
