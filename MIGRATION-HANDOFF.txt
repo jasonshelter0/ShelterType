@@ -1,0 +1,87 @@
+ShelterType — device migration and developer handoff
+Updated: 2026-11-10
+
+1. Authoritative project and current state
+Repository: https://github.com/jasonshelter0/ShelterType
+Latest release completed in this chat: v1.2.0
+Release source commit: 9aa6a20 (main; documentation may advance beyond it).
+Release: https://github.com/jasonshelter0/ShelterType/releases/tag/v1.2.0
+The application, course resources, dictionary data, brand assets and build/test scripts are in the repository. The old Kingsoft installation and separate dictionary projects are NOT required to build the integrated app.
+Internal TypeEasy names are historical; the public product name is ShelterType.
+This file records context from the development chat, not credentials or personal data.
+
+2. Move the application and your personal data separately
+Close ShelterType before copying. Copy the entire portable application folder to a writable folder on the new Windows device; do not copy only ShelterType.exe.
+Alternatively, extract the official release ZIP and copy your old UserData folder beside the new ShelterType.exe. Back up the destination before replacing existing records; two profiles are not automatically merged.
+The old active installation was D:\GADGETS\ShelterType-win-x64. This path is not required on the new device.
+UserData is deliberately absent from GitHub and releases. It contains course progress, statistics, heatmaps, favorites, settings, imported articles, shuffled orders and AI conversations. Copy the whole folder, not just Progress.
+UserData/AI/settings.json stores the API key encrypted using Windows DPAPI CurrentUser. Re-enter the key on the new device/account. Do not upload this file or any personal profile to GitHub. Saved chats and non-secret settings can be retained.
+A custom lesson-directory setting can point at the old machine: update it in Settings if needed. Use bundled course resources for a self-contained installation.
+Do not migrate TestData as your real profile; it is used by QA. Old preview folders had separate profiles.
+
+3. Continue development on a fresh Windows machine
+Install Git, PowerShell 7 and a .NET 8 SDK with Windows desktop build support. The development machine used SDK 8.0.427; do not copy its SDK/NuGet caches or depend on its temporary work directory.
+Clone the repository, then run from its root in PowerShell:
+  ./test.ps1 -Sdk dotnet -IncludeUpdate
+  ./package.ps1 -Sdk dotnet
+The explicit -Sdk dotnet avoids the old workspace-relative SDK fallback. Restore requires network access to NuGet. No Visual Studio installation or Node/Python service is required by the application build.
+package.ps1 includes reviewed courses, dictionary data, Glyphs.zip and branding. build.ps1 alone publishes program/runtime files, not the complete teaching-resource package.
+Default package output: artifacts/releases/<version>/ShelterType-win-x64.zip
+For a second build of the same version use a new -OutputDirectory; do not overwrite published assets.
+Authenticate Git/GitHub CLI on the new machine with your own account. Do not transfer tokens through source files. Native Windows gh or WSL gh can be used; WSL accesses Windows files via /mnt/<drive>/....
+No machine-specific absolute development path is required. Treat this clone as the source of truth, rather than keeping parallel source copies.
+
+4. Product decisions to preserve
+- Native lightweight Windows WPF UI; no WebView, Electron, browser engine or large UI wrapper. Linux is a future direction, not an implemented port. Keep portable core logic separate from Windows UI.
+- Integrated dictionary only. Do not restart a separate dictionary application/product line.
+- Familiar typing workflow, compact layout, minimal helper prose, consistent typography. Flat side navigation, restrained active/hover backgrounds, borderless vector icon buttons with tooltips and accessible names.
+- Chinese, English and French UI; changing UI language must not translate the actual lesson text. Wubi remains available in all UI languages.
+- English / Pinyin / Wubi menu order. Wubi root keyboard colours follow the five Wubi zones plus Z; the fold zone includes N (NBVCX).
+- The user rejected Unicode replacements for root diagrams. Preserve the current root shapes; do not revive the abandoned Unicode mapping project without a new request.
+- Wubi character/phrase courses accept committed Chinese IME text, retaining letter-code references. Root recognition drills show the root and accept its assigned letter; keep their dedicated hide-key toggle.
+- Shuffling suitable beginner drills happens in the original lesson, retaining the actual shuffled order and resume position. It must not create a duplicate top-level course category.
+- Course progress uses rings, with a central tick when complete. Completed lessons can be restarted. Tests support random texts and Enter to prepare/start.
+- Dictionary can be opened with F2 during practice/tests; test time continues while consulting it.
+- English display lines should not split words; input and reference use matching fonts and measured line boundaries. Avoid underline hints that visually change Chinese characters.
+- GitHub-style daily heatmap, per-text speed heatmaps, keyboard expected-versus-entered error paths and clickable mistake rows. Scope labels must distinguish individual text/test data from lifetime aggregates.
+- AI is optional and embedded in existing pages. Keep local chat history and compact summaries, explicit sending, and native HTTP adapters. Supported in 1.2.0: Chat Completions, OpenAI Responses and Anthropic Messages. External gateways are optional; none is bundled. Live provider access was not verified with a real user key in this chat; protocol tests use mocks.
+- Brand assets in Branding include the independent Shelter double-triangle S and ShelterType keyboard lockups, dark/light and monochrome variants. Shelter S is intended for other future projects too.
+
+5. Resource provenance and long-term intent
+The user stated that permission was obtained from the original author to include Kingsoft materials with attribution; preserve ACKNOWLEDGEMENTS.md and THIRD-PARTY-NOTICES.md. Do not infer a new blanket license from that statement.
+The eventual goal is to replace every Kingsoft-derived resource, including articles. For now keep them. Courses/provenance.json and origin fields support future filtering; package.ps1 -ExcludeKingsoft is a development path, not proof that every derived diagram is independently sourced.
+The user has not selected a license for the project's own source. Public GitHub visibility alone is not a license grant.
+
+6. Important failure history / QA constraints
+A. WPF startup: loading a pack:// icon in App's STATIC constructor caused real EXEs to fail before WPF registered the URI scheme. Keep icon loading after the Application base constructor (the instance constructor). A harness that creates Application first can mask this fault.
+B. Packed dictionary images: WPF decoding directly from a non-seekable ZIP entry stream caused a native crash. Copy the entry into a MemoryStream, use OnLoad, and freeze the image before crossing threads. Keep lazy loading and bounded caching; do not extract thousands of images at startup.
+C. Temporary QA programs previously caused Windows CLR error dialogs through uncaught assertions. Every new QA executable must have a catch-and-log entry boundary, nonzero failure exit, and a verified --qa-verify-failure path BEFORE constructing UI or profiles. Never disable Windows error reporting to hide failures.
+D. WPF test harnesses need STA and a DispatcherSynchronizationContext for asynchronous UI work. Catch dispatcher exceptions and mark the test failed. Do not assign Application.StartupUri=null.
+E. Always test the ACTUAL packaged EXE from a newly extracted ZIP, not only a project reference or offscreen view. Launch with --test-profile; ensure TestData/preferences.json disables update checks. Verify splash transitions to main, then normal exit. Never distribute TestData.
+F. Never force-kill the user's active app to deploy. Ask them to close it, back up important files and preserve UserData. Verify copied program hashes and unchanged personal records. Only close QA processes you started.
+G. Do not invent old per-test key/context details: older records only contain scores. Lifetime aggregate data remains available separately. IME text statistics are not physical keyboard-event measurements and context associations do not establish causation.
+H. New scripts should use literal paths, avoid destructive cross-shell file operations, and avoid printing credentials. Git safe.directory can be supplied per command on copied workspaces, rather than weakening global settings.
+
+7. Release process and latest validation
+Read RELEASING.md. Bump the project Version and release notes, run tests, commit, then build so version metadata matches the source commit. Tag and push main and the release tag.
+As explicitly requested, publish ONLY these two binary assets:
+  ShelterType-win-x64.zip
+  ShelterType-win-x64.zip.sha256
+Do not generate/upload the old code-only package. Retain installer resource validation and unchanged-file handling. Old clients fall back to the full package when no code asset exists.
+Create a draft release, upload/verify assets, check Windows CI, then publish as latest (not a prerelease). The public /releases/latest endpoint must expose the release without credentials, since the app's updater does not log in. Keep the repository public for this mechanism.
+GitHub Actions builds/tests and retains artifacts; it does not automatically publish a Release.
+v1.2.0 verification included 12 test suites, 140 update checks, 23 workflow checks, isolated WPF layout checks, and fresh-ZIP EXE startup/normal exit. GitHub Windows CI succeeded; public latest endpoint showed v1.2.0 and exactly the full ZIP/checksum pair.
+Official full ZIP SHA-256:
+9045d0361b0c4a2fefd9ce48a3322e1395562b2e73877c21206545b1b2749d21
+Some old local intermediate 1.2.0 packages predate the release. Use the official release, not a random preview/intermediate directory.
+
+8. What is intentionally not uploaded
+- Personal UserData, API keys, GitHub authentication, private chat transcripts.
+- Old compiled previews, SDK caches, temporary QA screenshots/harnesses and local backups. Main code and committed regression suites are sufficient to resume; visual checks may be recreated following section 6.
+- dev/unicode-review was an abandoned local candidate review, explicitly rejected by the user.
+- The untracked old local testing note described a pre-release 0.8-era design and is stale; do not treat it as current requirements.
+The prior workspace also contained a TypeEasy.Next source/app mirror. It was a local convenience, not an additional required repository or branch.
+
+9. Suggested first checks on the new device
+Run the test script and build a fresh full package. Verify dark/light themes and sidebar navigation; Wubi root conceal/show; IME character entry; shuffle/resume; English wrapping; timed-test history and mistakes; dictionary search/F2; AI format selection and saved chat reopening. Re-enter your API key and test a request yourself. Confirm your migrated personal records and imported articles are visible before deleting any old-device backup.
+There is no pending feature or release approval from the preceding development task. Future changes should start from the repository and this handoff, not require access to the full chat.

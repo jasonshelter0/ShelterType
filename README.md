@@ -108,14 +108,6 @@ ShelterType is a lightweight native Windows typing trainer with Wubi 86/98, Engl
 
 Download `ShelterType-win-x64.zip` from [Releases](https://github.com/jasonshelter0/ShelterType/releases/latest), extract the entire archive to a writable folder and run `ShelterType.exe`. The Windows x64 portable package includes .NET; no separate runtime installation is required. Updates preserve `UserData/`. Original course materials are included with permission confirmed by the project maintainer; see the acknowledgements above.
 
-## 本地开发新增功能（未发布）
+## 设备迁移与开发交接
 
-- 仅保留主程序内的 F2 词典，无独立词典入口。
-- 设置中可对五笔、拼音、单词等离散练习创建持久化乱序轮次；文章不打乱。左侧乱序课程可继续练习。
-- 限时测试支持默认随机文章，避免紧接着重复抽中同一篇。
-- 原文空格保留原始宽度；结果区不逐字折行；统一界面字体。
-- 86/98 字根表使用现有键盘绘制，可点键查看放大的轮廓。字根轮廓暂仍有 Kingsoft 来源。
-- 新增 32 篇带来源信息的公共领域文章；当前共 753 门课程。
-- `Courses/provenance.json` 记录资源来源，`package.ps1 -ExcludeKingsoft` 可生成不附带旧资源的包（默认仍附带）。
-
-本地测试步骤见 `本轮测试.txt`。个人记录不会提交进源码或打包。
+新设备构建步骤、个人数据迁移、产品决策和历史故障注意事项见 [MIGRATION-HANDOFF.txt](MIGRATION-HANDOFF.txt)。个人记录与 AI 密钥不在仓库中；请另行迁移 UserData，并在新设备重新填写密钥。
