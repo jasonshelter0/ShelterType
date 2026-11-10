@@ -50,7 +50,7 @@ public sealed class SettingsWindow : Window
             var body=new StackPanel();int sectionIndex=0;
             void Heading(string title){
                 int index=sectionIndex++;body=new StackPanel();
-                var kinds=new[]{AppIconKind.Settings,AppIconKind.Focus,AppIconKind.Articles,AppIconKind.Ai,AppIconKind.Update};
+                var kinds=new[]{AppIconKind.Settings,AppIconKind.Focus,AppIconKind.Articles,AppIconKind.Ai,AppIconKind.Update,AppIconKind.Articles};
                 var tab=StatsUi.IconButton(kinds[index],title,(_,_)=>{selectedSection=index;Rebuild();});tab.SetResourceReference(StyleProperty,"SidebarNavButton");tab.Width=182;tab.Height=42;tab.Margin=new Thickness(0,0,0,5);
                 var label=new StackPanel{Orientation=Orientation.Horizontal};label.Children.Add(new AppIcon{Kind=kinds[index],Width=19,Height=19,Margin=new Thickness(0,0,10,0)});label.Children.Add(new TextBlock{Text=title,FontSize=13,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,MaxWidth=135});tab.Content=label;
                 tab.SetResourceReference(BackgroundProperty,index==selectedSection?"Selected":"Bg");navigation.Children.Add(tab);
@@ -126,6 +126,7 @@ public sealed class SettingsWindow : Window
             Check(UiText.T("自动检查更新", "Check for updates automatically", "Rechercher automatiquement les mises à jour"), preferences.CheckForUpdates, v => preferences.CheckForUpdates = v);
             var update = Button(UiText.T("检查更新", "Check for updates", "Rechercher une mise à jour"), (_, _) => { RequestedAction = "update"; Close(); });
             update.HorizontalAlignment = HorizontalAlignment.Left; body.Children.Add(update);
+            Heading(UiText.T("备份与恢复","Backup and restore","Sauvegarde et restauration"));if(selectedSection==5&&userRoot is not null)body.Children.Add(new CloudBackupPanel(userRoot));
             var about=StatsUi.IconButton(AppIconKind.Info,UiText.T("关于","About","À propos"),(_,_)=>new AboutWindow{Owner=this}.ShowDialog());about.SetResourceReference(StyleProperty,"SidebarNavButton");about.Width=182;about.Height=42;about.Margin=new Thickness(0,20,0,0);var aboutLabel=new StackPanel{Orientation=Orientation.Horizontal};aboutLabel.Children.Add(new AppIcon{Kind=AppIconKind.Info,Width=19,Height=19,Margin=new Thickness(0,0,10,0)});aboutLabel.Children.Add(StatsUi.Text(UiText.T("关于","About","À propos"),13));about.Content=aboutLabel;navigation.Children.Add(about);
         }
         finally { building = false; }

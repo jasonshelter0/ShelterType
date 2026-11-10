@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         UiText.Language = prefs.Language;
         try { instanceLock = new FileStream(Path.Combine(store, "session.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
         catch (IOException) { MessageBox.Show(UiText.T("程序已在运行。", "The app is already running.", "L’application est déjà ouverte."), "ShelterType"); Application.Current.Shutdown(); return; }
+        ProfileBackup.ApplyPending(store);
         InitializeComponent();
         PreviewKeyDown += (_, e) => { if(e.Key == Key.F2) { e.Handled=true; OpenDictionary(); } };
         ApplyLanguage(false);
